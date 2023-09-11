@@ -1,8 +1,13 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
+#include <boost/asio.hpp>
+#include "SimpleSerial.h"
 
-int main( int argc, char** argv )
+using namespace std;
+using namespace boost;
+
+int main(int argc, char **argv)
 {
     cv::Mat markerImage;
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
@@ -21,7 +26,7 @@ int main( int argc, char** argv )
     cv::namedWindow("draw markers", cv::WINDOW_NORMAL);
     cv::imshow("draw markers", outputImage);
     cv::imwrite("drawMarkers.png", outputImage);
-    cv::waitKey(0);
+    //cv::waitKey(0);
 
     cv::Mat cameraMatrix, distCoeffs;
 
@@ -42,12 +47,28 @@ int main( int argc, char** argv )
         auto rvec = rvecs[i];
         auto tvec = tvecs[i];
         cv::aruco::drawAxis(outputImage, cameraMatrix, distCoeffs, rvec, tvec, 0.1);
-    }
+    }cv::waitKey(0);
 
     cv::namedWindow("draw axis", cv::WINDOW_NORMAL);
     cv::imshow("draw axis", outputImage);
     cv::imwrite("drawAxis.png", outputImage);
     cv::waitKey(0);
+
+    
+    try
+    {
+
+        SimpleSerial serial("/dev/ttyACM0", 9600);
+
+        serial.writeString("Hello world\n");
+
+        cout << "Received : " << serial.readLine() << " : end" << endl;
+    }
+    catch (boost::system::system_error &e)
+    {
+        cout << "Error: " << e.what() << endl;
+        return 1;
+    }
 
     return 0;
 }
