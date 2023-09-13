@@ -84,51 +84,5 @@ int main(int argc, char **argv)
 
     serial.close();
 
-    /*
-    try
-    {
-        // open the platform specific device name
-        // windows will be COM ports, linux will use /dev/ttyS* or /dev/ttyUSB*, etc
-        serial.open("/dev/ttyACM0");
-        serial.set_option(asio::serial_port_base::baud_rate(9600)); // Configura la velocidad de baudios
-
-        char data[256]; // Un buffer para almacenar los datos leídos
-
-        for (int i = 0; i < 10; i++)
-        {
-            size_t bytesRead = asio::read(serial, asio::buffer(data, sizeof(data)));
-
-            // Procesa y muestra los datos leídos
-            std::string receivedData(data, bytesRead);
-            std::cout << "Datos recibidos: " << receivedData << std::endl;
-
-            // Buffer para almacenar los datos leídos
-            boost::asio::streambuf buffer; 
-
-            // Función de lectura asincrónica
-            boost::asio::async_read_until(serial, buffer, '@',
-                                          [&](const boost::system::error_code &error, std::size_t bytes_transferred)
-                                          {
-                                              if (!error)
-                                              {
-                                                  std::istream input_stream(&buffer);
-                                                  std::string line;
-                                                  std::getline(input_stream, line); // Leer una línea hasta el '\n'
-                                                  std::cout << "Cadena recibida: " << line << std::endl;
-                                              }
-                                              else
-                                              {
-                                                  std::cerr << "Error de lectura: " << error.message() << std::endl;
-                                              }
-                                          });
-        }
-
-        serial.close();
-    }
-    catch (boost::system::system_error &e)
-    {
-        std::cerr << e.what() << std::endl;
-    }*/
-
     return 0;
 }
