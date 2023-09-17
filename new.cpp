@@ -59,26 +59,42 @@ int main(int argc, char **argv)
     // create a serial port object
     asio::serial_port serial(io);
 
-    try 
+    try
     {
-        serial.open("/dev/ttyACM0"); // Reemplaza con el nombre de tu puerto serial
+        serial.open("/dev/ttyACM0");                                // Reemplaza con el nombre de tu puerto serial
         serial.set_option(asio::serial_port_base::baud_rate(9600)); // Configura la velocidad de baudios
 
+        int nbytes = -1;
+        asio::streambuf buffer;
+        
         for (int i = 0; i < 10000; i++)
         {
-            asio::streambuf buffer;
-            asio::read_until(serial, buffer, '$'); // Lee hasta encontrar un '\n'
+            nbytes = -1;
 
+            boost::system::error_code ec;
+            // Lee hasta encontrar un '\n'
+            nbytes = asio::read_until(serial, buffer, '\n', ec);
             // Convierte el contenido del buffer en una cadena de texto
-            std::istream is(&buffer);
-            std::string receivedData;
-            std::getline(is, receivedData);
+            if (ec)
+            {
+                std::cout << ec.what();
+            }
+            else
+            {
 
-            // Procesa y muestra los datos leídos
-            std::cout << "Datos recibidos: " << receivedData << std::endl;
+                std::string receivedData;
+                std::istream is(&buffer);
+                std::getline(is, receivedData);
+
+                // Procesa y muestra los datos leídos
+
+                std::cout << "Datos recibidos: " << nbytes << " |" << receivedData
+                          << "|" << std::endl;
+            }
         }
-
-    } catch (std::exception& e) {
+    }
+    catch (std::exception &e)
+    {
         std::cerr << "Error: " << e.what() << std::endl;
     }
 
