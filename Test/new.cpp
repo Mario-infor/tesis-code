@@ -10,20 +10,22 @@ using namespace boost;
 
 void cameraThread()
 {
-    /*cv::Mat markerImage;
-    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
-    cv::aruco::drawMarker(dictionary, 23, 200, markerImage, 1);
-    cv::imwrite("marker23.png", markerImage);
-    cv::Mat inputImage = cv::imread("singlemarkersoriginal.jpg", cv::IMREAD_COLOR);*/
-
     cv::VideoCapture cap(0);
 
     if (!cap.isOpened())
-    {
         std::cerr << "Error al abrir la cámara." << std::endl;
-    }
     else
     {
+        cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+
+        cv::Mat cameraMatrix, distCoeffs;
+
+        cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
+                        0, 660.76768, 242.771412,
+                        0, 0, 1);
+
+        distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
+
         while (true)
         {
             cv::Mat frame;
@@ -35,56 +37,30 @@ void cameraThread()
                 break;
             }
 
-            cv::imshow("Video de la cámara", frame);
+            std::vector<int> markerIds;
+            std::vector<std::vector<cv::Point2f>> markerCorners;
 
-            // Presiona la tecla 'q' para salir del bucle
-            if (cv::waitKey(1) == 'q')
+            cv::aruco::detectMarkers(frame, dictionary, markerCorners, markerIds);
+
+            if (markerIds.size() > 0)
             {
-                cap.release();           // Libera la captura de video
-                cv::destroyAllWindows(); // Cierra todas las ventanas
+                cv::aruco::drawDetectedMarkers(frame, markerCorners, markerIds);
 
-                break;
+                std::vector<cv::Vec3d> rvecs, tvecs;
+                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+
+                for (int i = 0; i < (int)rvecs.size(); i++)
+                {
+                    cv::aruco::drawAxis(frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
+                }
             }
+
+            cv::imshow("draw axis", frame);
+
+            if (cv::waitKey(1) == 'q')
+                break;
         }
     }
-
-    /*std::vector<int> markerIds;
-    std::vector<std::vector<cv::Point2f>> markerCorners, rejectedCandidates;
-    cv::Ptr<cv::aruco::DetectorParameters> parameters = cv::aruco::DetectorParameters::create();
-    cv::aruco::detectMarkers(inputImage, dictionary, markerCorners, markerIds, parameters, rejectedCandidates);
-
-    cv::Mat outputImage = inputImage.clone();
-    cv::aruco::drawDetectedMarkers(outputImage, markerCorners, markerIds);
-
-    cv::namedWindow("draw markers", cv::WINDOW_NORMAL);
-    cv::imshow("draw markers", outputImage);
-    cv::imwrite("drawMarkers.png", outputImage);
-    // cv::waitKey(0);
-
-    cv::Mat cameraMatrix, distCoeffs;
-
-    cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
-                    0, 660.76768, 242.771412,
-                    0, 0, 1);
-
-    distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
-
-    std::vector<cv::Vec3d> rvecs, tvecs;
-    cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
-
-    inputImage.copyTo(outputImage);
-    for (int i = 0; i < (int)rvecs.size(); ++i)
-    {
-        auto rvec = rvecs[i];
-        auto tvec = tvecs[i];
-        cv::aruco::drawAxis(outputImage, cameraMatrix, distCoeffs, rvec, tvec, 0.1);
-    }
-    cv::waitKey(0);
-
-    cv::namedWindow("draw axis", cv::WINDOW_NORMAL);
-    cv::imshow("draw axis", outputImage);
-    cv::imwrite("drawAxis.png", outputImage);
-    cv::waitKey(0);*/
 }
 
 void imuThread()
