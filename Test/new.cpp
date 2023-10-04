@@ -2,6 +2,7 @@
 #include <opencv2/aruco.hpp>
 #include <iostream>
 #include <boost/asio.hpp>
+#include <chrono>
 
 using namespace std;
 using namespace boost;
@@ -28,6 +29,7 @@ void cameraThread()
 
         while (true)
         {
+            auto start = chrono::steady_clock::now();
             cv::Mat frame;
             cap.read(frame);
 
@@ -57,28 +59,33 @@ void cameraThread()
 
             cv::imshow("draw axis", frame);
 
+            auto end = chrono::steady_clock::now();
+            auto timePassedMilliseconds = chrono::duration_cast<chrono::milliseconds>(end - start);
+
+            cout << "Camera time passed: " << timePassedMilliseconds.count() << endl;
+
             if (cv::waitKey(1) == 'q')
                 break;
         }
     }
+    cout << "Camera Finished!!" << endl;
 }
 
 void imuThread()
 {
     asio::io_service io;
-    // create a serial port object
     asio::serial_port serial(io);
 
     try
     {
-        serial.open("/dev/ttyACM0");                                // Reemplaza con el nombre de tu puerto serial
-        serial.set_option(asio::serial_port_base::baud_rate(9600)); // Configura la velocidad de baudios
-
+        serial.open("/dev/ttyACM0");
+        serial.set_option(asio::serial_port_base::baud_rate(9600));
         int nbytes = -1;
         asio::streambuf buffer;
 
-        for (int i = 0; i < 10000; i++)
+        for (size_t i = 0; i < 100; i++)
         {
+            auto start = chrono::steady_clock::now();
             nbytes = -1;
 
             boost::system::error_code ec;
@@ -91,16 +98,17 @@ void imuThread()
             }
             else
             {
-
                 std::string receivedData;
                 std::istream is(&buffer);
                 std::getline(is, receivedData);
 
-                // Procesa y muestra los datos leídos
-
-                std::cout << "Datos recibidos: " << nbytes << " |" << receivedData
-                          << "|" << std::endl;
+                //std::cout << "Ite: " << i << " Datos recibidos: " << nbytes << " |" << receivedData
+                //          << "|" << std::endl;
             }
+            auto end = chrono::steady_clock::now();
+            auto timePassedMilliseconds = chrono::duration_cast<chrono::milliseconds>(end - start);
+
+            cout << "IMU time passed: " << timePassedMilliseconds.count() << endl;
         }
     }
     catch (std::exception &e)
@@ -109,16 +117,18 @@ void imuThread()
     }
 
     serial.close();
+    cout << "Imu Finished!!" << endl;
 }
 
 int main(int argc, char **argv)
 {
-    thread camera(cameraThread);
-    // thread imu(imuThread);
+    //thread camera(cameraThread);
+    thread imu(imuThread);
 
-    camera.join();
-    // imu.join();
+    //camera.join();
+    imu.join();
 
-    cout << "Camera Finished!!" << endl;
+    cout << "Main Finished!!" << endl;
+
     return 0;
 }
