@@ -2,16 +2,15 @@
 #include <opencv2/aruco.hpp>
 #include <iostream>
 #include <boost/asio.hpp>
-#include "SimpleSerial.h"
 
 using namespace std;
 using namespace boost;
 
 #define MAXLEN 512 // maximum buffer size
 
-int main(int argc, char **argv)
+void cameraThread()
 {
-    /*cv::Mat markerImage;
+    cv::Mat markerImage;
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
     cv::aruco::drawMarker(dictionary, 23, 200, markerImage, 1);
     cv::imwrite("marker23.png", markerImage);
@@ -28,7 +27,7 @@ int main(int argc, char **argv)
     cv::namedWindow("draw markers", cv::WINDOW_NORMAL);
     cv::imshow("draw markers", outputImage);
     cv::imwrite("drawMarkers.png", outputImage);
-    // cv::waitKey(0);
+    //cv::waitKey(0);
 
     cv::Mat cameraMatrix, distCoeffs;
 
@@ -53,8 +52,11 @@ int main(int argc, char **argv)
     cv::namedWindow("draw axis", cv::WINDOW_NORMAL);
     cv::imshow("draw axis", outputImage);
     cv::imwrite("drawAxis.png", outputImage);
-    cv::waitKey(0);*/
+    cv::waitKey(0);
+}
 
+void imuThread()
+{
     asio::io_service io;
     // create a serial port object
     asio::serial_port serial(io);
@@ -99,6 +101,15 @@ int main(int argc, char **argv)
     }
 
     serial.close();
+}
+
+int main(int argc, char **argv)
+{
+    thread camera(cameraThread);
+    thread imu(imuThread);
+
+    camera.join();
+    imu.join();
 
     return 0;
 }
