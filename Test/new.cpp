@@ -10,13 +10,45 @@ using namespace boost;
 
 void cameraThread()
 {
-    cv::Mat markerImage;
+    /*cv::Mat markerImage;
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
     cv::aruco::drawMarker(dictionary, 23, 200, markerImage, 1);
     cv::imwrite("marker23.png", markerImage);
+    cv::Mat inputImage = cv::imread("singlemarkersoriginal.jpg", cv::IMREAD_COLOR);*/
 
-    cv::Mat inputImage = cv::imread("singlemarkersoriginal.jpg", cv::IMREAD_COLOR);
-    std::vector<int> markerIds;
+    cv::VideoCapture cap(0);
+
+    if (!cap.isOpened())
+    {
+        std::cerr << "Error al abrir la cámara." << std::endl;
+    }
+    else
+    {
+        while (true)
+        {
+            cv::Mat frame;
+            cap.read(frame);
+
+            if (frame.empty())
+            {
+                std::cerr << "No se pudo capturar el frame." << std::endl;
+                break;
+            }
+
+            cv::imshow("Video de la cámara", frame);
+
+            // Presiona la tecla 'q' para salir del bucle
+            if (cv::waitKey(1) == 'q')
+            {
+                cap.release();           // Libera la captura de video
+                cv::destroyAllWindows(); // Cierra todas las ventanas
+
+                break;
+            }
+        }
+    }
+
+    /*std::vector<int> markerIds;
     std::vector<std::vector<cv::Point2f>> markerCorners, rejectedCandidates;
     cv::Ptr<cv::aruco::DetectorParameters> parameters = cv::aruco::DetectorParameters::create();
     cv::aruco::detectMarkers(inputImage, dictionary, markerCorners, markerIds, parameters, rejectedCandidates);
@@ -27,7 +59,7 @@ void cameraThread()
     cv::namedWindow("draw markers", cv::WINDOW_NORMAL);
     cv::imshow("draw markers", outputImage);
     cv::imwrite("drawMarkers.png", outputImage);
-    //cv::waitKey(0);
+    // cv::waitKey(0);
 
     cv::Mat cameraMatrix, distCoeffs;
 
@@ -52,7 +84,7 @@ void cameraThread()
     cv::namedWindow("draw axis", cv::WINDOW_NORMAL);
     cv::imshow("draw axis", outputImage);
     cv::imwrite("drawAxis.png", outputImage);
-    cv::waitKey(0);
+    cv::waitKey(0);*/
 }
 
 void imuThread()
@@ -68,7 +100,7 @@ void imuThread()
 
         int nbytes = -1;
         asio::streambuf buffer;
-        
+
         for (int i = 0; i < 10000; i++)
         {
             nbytes = -1;
@@ -106,10 +138,11 @@ void imuThread()
 int main(int argc, char **argv)
 {
     thread camera(cameraThread);
-    thread imu(imuThread);
+    // thread imu(imuThread);
 
     camera.join();
-    imu.join();
+    // imu.join();
 
+    cout << "Camera Finished!!" << endl;
     return 0;
 }
