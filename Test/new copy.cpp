@@ -4,10 +4,11 @@
 #include <boost/asio.hpp>
 #include <chrono>
 #include <curses.h>
-#include <vector>
-#include "RingBuffer.h"
 
 #define MAXLEN 512 // maximum buffer size
+
+bool cameraRun = true;
+bool imuRun = true;
 
 struct CameraInput
 {
@@ -15,14 +16,9 @@ struct CameraInput
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
-size_t cameraCaptureSize = 100;
 
-std::vector<CameraInput> cameraFramesList;
-RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(cameraCaptureSize);
-bool cameraRun = true;
-bool imuRun = true;
 
-void cameraCaptureThread()
+void cameraThread()
 {
     cv::VideoCapture cap(0);
 
@@ -30,9 +26,19 @@ void cameraCaptureThread()
         std::cerr << "Error al abrir la cámara." << std::endl;
     else
     {
-        for (size_t i = 0; i < cameraCaptureSize; i++)
+        cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+
+        cv::Mat cameraMatrix, distCoeffs;
+
+        cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
+                        0, 660.76768, 242.771412,
+                        0, 0, 1);
+
+        distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
+
+        while (cameraRun)
         {
-            std::cout << "Ite: " << i << std::endl;
+            auto start = std::chrono::steady_clock::now();
             cv::Mat frame;
             cap.read(frame);
 
@@ -41,16 +47,35 @@ void cameraCaptureThread()
                 std::cerr << "No se pudo capturar el frame." << std::endl;
                 break;
             }
-            else
+
+            std::vector<int> markerIds;
+            std::vector<std::vector<cv::Point2f>> markerCorners;
+
+            cv::aruco::detectMarkers(frame, dictionary, markerCorners, markerIds);
+
+            if (markerIds.size() > 0)
             {
-                CameraInput capture;
-                capture.frame = frame.clone();
-                capture.timeStamp = std::chrono::steady_clock::now();
-                //cameraFramesList.push_back(capture);
-                cameraFramesBuffer.Queue(capture);
+                cv::aruco::drawDetectedMarkers(frame, markerCorners, markerIds);
+
+                std::vector<cv::Vec3d> rvecs, tvecs;
+                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+
+                for (int i = 0; i < (int)rvecs.size(); i++)
+                {
+                    cv::aruco::drawAxis(frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
+                }
             }
+
+            cv::imshow("draw axis", frame);
+
+            auto end = std::chrono::steady_clock::now();
+            auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+            std::cout << "Camera time passed: " << timePassedMilliseconds.count() << std::endl;
+            std::cout.flush();
         }
     }
+    std::cout << "Camera Finished!!" << std::endl;
 }
 
 void imuThread()
@@ -107,31 +132,29 @@ int main(int argc, char **argv)
 {
 
     //WINDOW *win;
-    std::thread camera(cameraCaptureThread);
+    std::thread camera(cameraThread);
     //thread imu(imuThread);
 
 
     //win = initscr();
     //clearok(win, TRUE);
-    
+    while (true)
+    {
 
-    
+        //wrefresh(win);
+        if (cv::waitKey(1) == 'q')
+        {
+            cameraRun = imuRun = false;
+            break;
+        }
+            
+    }
+
+  
     camera.join();
     //imu.join();
 
-    //auto start = cameraFramesList[0].timeStamp;
-    CameraInput start;
-    cameraFramesBuffer.Dequeue(start);
-
-    for (size_t i = 1; i < cameraFramesBuffer.getT(); i++)
-    {
-        CameraInput end;
-        cameraFramesBuffer.Dequeue(end);
-        auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end.timeStamp - start.timeStamp);
-        std::cout << "Time between captures: " << timePassedMilliseconds.count() << std::endl;
-        start = end;
-    }
-    
+    std::cout << "Main Finished!!" << std::endl;
 
     //endwin();
     return 0;
