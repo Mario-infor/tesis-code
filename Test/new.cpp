@@ -3,11 +3,15 @@
 #include <iostream>
 #include <boost/asio.hpp>
 #include <chrono>
+#include <curses.h>
 
 using namespace std;
 using namespace boost;
 
 #define MAXLEN 512 // maximum buffer size
+
+bool cameraRun = true;
+bool imuRun = true;
 
 void cameraThread()
 {
@@ -27,7 +31,7 @@ void cameraThread()
 
         distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
 
-        while (true)
+        while (cameraRun)
         {
             auto start = chrono::steady_clock::now();
             cv::Mat frame;
@@ -62,13 +66,11 @@ void cameraThread()
             auto end = chrono::steady_clock::now();
             auto timePassedMilliseconds = chrono::duration_cast<chrono::milliseconds>(end - start);
 
-            cout << "Camera time passed: " << timePassedMilliseconds.count() << endl;
-
-            if (cv::waitKey(1) == 'q')
-                break;
+            std::cout << "Camera time passed: " << timePassedMilliseconds.count() << std::endl;
+            std::cout.flush();
         }
     }
-    cout << "Camera Finished!!" << endl;
+    std::cout << "Camera Finished!!" << std::endl;
 }
 
 void imuThread()
@@ -80,17 +82,17 @@ void imuThread()
     {
         serial.open("/dev/ttyACM0");
         serial.set_option(asio::serial_port_base::baud_rate(9600));
-        int nbytes = -1;
+        //int nbytes = -1;
         asio::streambuf buffer;
 
-        for (size_t i = 0; i < 100; i++)
+        while(imuRun)
         {
             auto start = chrono::steady_clock::now();
-            nbytes = -1;
+            //nbytes = -1;
 
             boost::system::error_code ec;
             // Lee hasta encontrar un '\n'
-            nbytes = asio::read_until(serial, buffer, '\n', ec);
+            asio::read_until(serial, buffer, '\n', ec);
             // Convierte el contenido del buffer en una cadena de texto
             if (ec)
             {
@@ -102,13 +104,14 @@ void imuThread()
                 std::istream is(&buffer);
                 std::getline(is, receivedData);
 
-                //std::cout << "Ite: " << i << " Datos recibidos: " << nbytes << " |" << receivedData
-                //          << "|" << std::endl;
+                // std::cout << "Ite: " << i << " Datos recibidos: " << nbytes << " |" << receivedData
+                //           << "|" << std::endl;
             }
             auto end = chrono::steady_clock::now();
             auto timePassedMilliseconds = chrono::duration_cast<chrono::milliseconds>(end - start);
 
-            cout << "IMU time passed: " << timePassedMilliseconds.count() << endl;
+            std::cout << "IMU time passed: " << timePassedMilliseconds.count() << std::endl;
+            std::cout.flush();
         }
     }
     catch (std::exception &e)
@@ -117,18 +120,37 @@ void imuThread()
     }
 
     serial.close();
-    cout << "Imu Finished!!" << endl;
+    std::cout << "Imu Finished!!" << std::endl;
 }
 
 int main(int argc, char **argv)
 {
-    //thread camera(cameraThread);
-    thread imu(imuThread);
 
-    //camera.join();
-    imu.join();
+    WINDOW *win;
+    thread camera(cameraThread);
+    //thread imu(imuThread);
 
-    cout << "Main Finished!!" << endl;
 
+    win = initscr();
+    clearok(win, TRUE);
+    while (true)
+    {
+
+        wrefresh(win);
+        if (cv::waitKey(1) == 'q')
+        {
+            cameraRun = imuRun = false;
+            break;
+        }
+            
+    }
+
+  
+    camera.join();
+    //imu.join();
+
+    std::cout << "Main Finished!!" << std::endl;
+
+    endwin();
     return 0;
 }
