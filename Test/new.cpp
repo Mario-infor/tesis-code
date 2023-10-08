@@ -16,11 +16,24 @@ struct CameraInput
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
+struct ImuInput
+{
+    float accX;
+    float accY;
+    float accZ;
+    float quatX;
+    float quatY;
+    float quatZ;
+    float quatW;
+    std::chrono::time_point<std::chrono::steady_clock> timeStamp;
+};
+
 size_t cameraCaptureSize = 100;
 size_t indexCamera = 0;
 std::mutex mutex;
 // std::vector<CameraInput> cameraFramesList;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(cameraCaptureSize);
+RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(cameraCaptureSize);
 bool cameraRun = true;
 bool imuRun = true;
 bool capturedNewFrame = false;
@@ -49,7 +62,6 @@ void cameraCaptureThread()
                 CameraInput capture;
                 capture.frame = frame.clone();
                 capture.timeStamp = std::chrono::steady_clock::now();
-                // cameraFramesList.push_back(capture);
                 cameraFramesBuffer.Queue(capture);
                 capturedNewFrame = true;
             }
@@ -116,6 +128,35 @@ void cameraDisplayThread()
     cv::destroyAllWindows();
 }
 
+void parseImuData(std::string data, std::vector<float> &parsedData)
+{
+    std::stringstream ss(data);
+    std::vector<std::string> splitData;
+    std::string temp;
+
+    while (std::getline(ss, temp, ','))
+    {
+        splitData.push_back(temp);
+    }
+
+    for (const std::string &item : splitData)
+    {
+        try
+        {
+            float number = std::stof(item);
+            parsedData.push_back(number);
+        }
+        catch (const std::invalid_argument &e)
+        {
+            std::cerr << "Error: Could not convert string to float. " << e.what() << std::endl;
+        }
+        catch (const std::out_of_range &e)
+        {
+            std::cerr << "Error: Value is out of float range. " << e.what() << std::endl;
+        }
+    }
+}
+
 void imuThread()
 {
     boost::asio::io_service io;
@@ -125,18 +166,15 @@ void imuThread()
     {
         serial.open("/dev/ttyACM0");
         serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
-        // int nbytes = -1;
         boost::asio::streambuf buffer;
 
-        while (imuRun)
-        {
-            auto start = std::chrono::steady_clock::now();
-            // nbytes = -1;
+        cv::waitKey(3000);
 
+        for (size_t i = 0; i < cameraCaptureSize; i++)
+        {
             boost::system::error_code ec;
-            // Lee hasta encontrar un '\n'
             boost::asio::read_until(serial, buffer, '\n', ec);
-            // Convierte el contenido del buffer en una cadena de texto
+
             if (ec)
             {
                 std::cout << ec.what();
@@ -146,15 +184,22 @@ void imuThread()
                 std::string receivedData;
                 std::istream is(&buffer);
                 std::getline(is, receivedData);
+                
+                std::vector<float> parsedData;
+                parseImuData(receivedData, parsedData);
 
-                // std::cout << "Ite: " << i << " Datos recibidos: " << nbytes << " |" << receivedData
-                //           << "|" << std::endl;
+                ImuInput imuInput;
+                imuInput.accX = parsedData[0];
+                imuInput.accY = parsedData[1];
+                imuInput.accZ = parsedData[2];
+                imuInput.quatW = parsedData[3];
+                imuInput.quatX = parsedData[4];
+                imuInput.quatY = parsedData[5];
+                imuInput.quatZ = parsedData[6];
+                imuInput.timeStamp = std::chrono::steady_clock::now();
+
+                imuDataBuffer.Queue(imuInput);
             }
-            auto end = std::chrono::steady_clock::now();
-            auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-            std::cout << "IMU time passed: " << timePassedMilliseconds.count() << std::endl;
-            std::cout.flush();
         }
     }
     catch (std::exception &e)
@@ -163,22 +208,29 @@ void imuThread()
     }
 
     serial.close();
-    std::cout << "Imu Finished!!" << std::endl;
 }
 
 int main(int argc, char **argv)
 {
     // WINDOW *win;
-    std::thread cameraCapture(cameraCaptureThread);
-    std::thread cameraDisplay(cameraDisplayThread);
+    // std::thread cameraCapture(cameraCaptureThread);
+    // std::thread cameraDisplay(cameraDisplayThread);
     std::thread imu(imuThread);
 
     // win = initscr();
     // clearok(win, TRUE);
 
-    cameraCapture.join();
-    cameraDisplay.join();
+    // cameraCapture.join();
+    // cameraDisplay.join();
     imu.join();
+
+    while (true)
+    {
+        if (cv::waitKey(0) == 'q')
+        {
+            imuRun = false;
+        }
+    }
 
     // auto start = cameraFramesList[0].timeStamp;
     /*CameraInput start;
@@ -192,6 +244,16 @@ int main(int argc, char **argv)
         std::cout << "Time between captures: " << timePassedMilliseconds.count() << std::endl;
         start = end;
     }*/
+
+    for (size_t i = 0; i < imuDataBuffer.getT(); i++)
+    {
+        ImuInput temp;
+        imuDataBuffer.Dequeue(temp);
+        //X:0.01,Y:0.00,Z:0.19@W:0.9999,X:-0.0130,Y:0.0082,Z:0.0000
+        std::cout << "X:" << temp.accX << "," << "Y:" << temp.accY << "," << "Z:" << temp.accZ << "@" 
+            << "W:" << temp.quatW << "," << "X:" << temp.quatX << "," << "Y:" << temp.quatY << ","
+            << "Z:" << temp.quatZ << "," << std::endl;
+    }
 
     // endwin();
     return 0;
