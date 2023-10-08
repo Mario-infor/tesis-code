@@ -5,6 +5,7 @@
 #include <chrono>
 #include <curses.h>
 #include <vector>
+#include <mutex>
 #include "RingBuffer.h"
 
 #define MAXLEN 512 // maximum buffer size
@@ -17,12 +18,13 @@ struct CameraInput
 
 size_t cameraCaptureSize = 100;
 size_t indexCamera = 0;
-
+std::mutex mutex;
 // std::vector<CameraInput> cameraFramesList;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(cameraCaptureSize);
 bool cameraRun = true;
 bool imuRun = true;
 bool capturedNewFrame = false;
+bool cameraThreadIsRunning = true;
 
 void cameraCaptureThread()
 {
@@ -53,6 +55,9 @@ void cameraCaptureThread()
             }
         }
     }
+    mutex.lock();
+    cameraThreadIsRunning = false;
+    mutex.unlock();
 }
 
 void cameraDisplayThread()
@@ -69,11 +74,14 @@ void cameraDisplayThread()
 
     size_t localCameraIndex = 0;
 
-    while (localCameraIndex < cameraCaptureSize)
+    mutex.lock();
+    bool keepLooping = cameraThreadIsRunning;
+    mutex.unlock();
+
+    while (keepLooping)
     {
         if (capturedNewFrame)
         {
-            std::cout << "AAAAAAAAAAAAAAAAAAAAAAAAAAA" << std::endl;
             CameraInput frame;
             cameraFramesBuffer.Dequeue(frame);
 
@@ -101,7 +109,11 @@ void cameraDisplayThread()
 
             cv::waitKey(33);
         }
+        mutex.lock();
+        keepLooping = cameraThreadIsRunning;
+        mutex.unlock();
     }
+    cv::destroyAllWindows();
 }
 
 void imuThread()
@@ -159,14 +171,14 @@ int main(int argc, char **argv)
     // WINDOW *win;
     std::thread cameraCapture(cameraCaptureThread);
     std::thread cameraDisplay(cameraDisplayThread);
-    // thread imu(imuThread);
+    std::thread imu(imuThread);
 
     // win = initscr();
     // clearok(win, TRUE);
 
     cameraCapture.join();
     cameraDisplay.join();
-    // imu.join();
+    imu.join();
 
     // auto start = cameraFramesList[0].timeStamp;
     /*CameraInput start;
