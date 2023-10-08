@@ -16,11 +16,13 @@ struct CameraInput
 };
 
 size_t cameraCaptureSize = 100;
+size_t indexCamera = 0;
 
-std::vector<CameraInput> cameraFramesList;
+// std::vector<CameraInput> cameraFramesList;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(cameraCaptureSize);
 bool cameraRun = true;
 bool imuRun = true;
+bool capturedNewFrame = false;
 
 void cameraCaptureThread()
 {
@@ -32,7 +34,6 @@ void cameraCaptureThread()
     {
         for (size_t i = 0; i < cameraCaptureSize; i++)
         {
-            std::cout << "Ite: " << i << std::endl;
             cv::Mat frame;
             cap.read(frame);
 
@@ -46,9 +47,59 @@ void cameraCaptureThread()
                 CameraInput capture;
                 capture.frame = frame.clone();
                 capture.timeStamp = std::chrono::steady_clock::now();
-                //cameraFramesList.push_back(capture);
+                // cameraFramesList.push_back(capture);
                 cameraFramesBuffer.Queue(capture);
+                capturedNewFrame = true;
             }
+        }
+    }
+}
+
+void cameraDisplayThread()
+{
+    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+
+    cv::Mat cameraMatrix, distCoeffs;
+
+    cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
+                    0, 660.76768, 242.771412,
+                    0, 0, 1);
+
+    distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
+
+    size_t localCameraIndex = 0;
+
+    while (localCameraIndex < cameraCaptureSize)
+    {
+        if (capturedNewFrame)
+        {
+            std::cout << "AAAAAAAAAAAAAAAAAAAAAAAAAAA" << std::endl;
+            CameraInput frame;
+            cameraFramesBuffer.Dequeue(frame);
+
+            std::vector<int> markerIds;
+            std::vector<std::vector<cv::Point2f>> markerCorners;
+
+            cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
+
+            if (markerIds.size() > 0)
+            {
+                cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+
+                std::vector<cv::Vec3d> rvecs, tvecs;
+                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+
+                for (int i = 0; i < (int)rvecs.size(); i++)
+                {
+                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
+                }
+            }
+
+            cv::imshow("draw axis", frame.frame);
+            localCameraIndex += 1;
+            capturedNewFrame = false;
+
+            cv::waitKey(33);
         }
     }
 }
@@ -62,13 +113,13 @@ void imuThread()
     {
         serial.open("/dev/ttyACM0");
         serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
-        //int nbytes = -1;
+        // int nbytes = -1;
         boost::asio::streambuf buffer;
 
-        while(imuRun)
+        while (imuRun)
         {
             auto start = std::chrono::steady_clock::now();
-            //nbytes = -1;
+            // nbytes = -1;
 
             boost::system::error_code ec;
             // Lee hasta encontrar un '\n'
@@ -105,22 +156,20 @@ void imuThread()
 
 int main(int argc, char **argv)
 {
+    // WINDOW *win;
+    std::thread cameraCapture(cameraCaptureThread);
+    std::thread cameraDisplay(cameraDisplayThread);
+    // thread imu(imuThread);
 
-    //WINDOW *win;
-    std::thread camera(cameraCaptureThread);
-    //thread imu(imuThread);
+    // win = initscr();
+    // clearok(win, TRUE);
 
+    cameraCapture.join();
+    cameraDisplay.join();
+    // imu.join();
 
-    //win = initscr();
-    //clearok(win, TRUE);
-    
-
-    
-    camera.join();
-    //imu.join();
-
-    //auto start = cameraFramesList[0].timeStamp;
-    CameraInput start;
+    // auto start = cameraFramesList[0].timeStamp;
+    /*CameraInput start;
     cameraFramesBuffer.Dequeue(start);
 
     for (size_t i = 1; i < cameraFramesBuffer.getT(); i++)
@@ -130,9 +179,8 @@ int main(int argc, char **argv)
         auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end.timeStamp - start.timeStamp);
         std::cout << "Time between captures: " << timePassedMilliseconds.count() << std::endl;
         start = end;
-    }
-    
+    }*/
 
-    //endwin();
+    // endwin();
     return 0;
 }
