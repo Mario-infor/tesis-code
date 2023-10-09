@@ -9,6 +9,7 @@
 #include "RingBuffer.h"
 
 #define MAXLEN 512 // maximum buffer size
+#define LOOPLENGTH 1000
 
 struct CameraInput
 {
@@ -28,16 +29,15 @@ struct ImuInput
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
-size_t cameraCaptureSize = 1000;
-size_t indexCamera = 0;
 std::mutex mutex;
-// std::vector<CameraInput> cameraFramesList;
-RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(cameraCaptureSize);
-RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(cameraCaptureSize);
-bool cameraRun = true;
-bool imuRun = true;
+RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(LOOPLENGTH);
+RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(LOOPLENGTH);
+
 bool capturedNewFrame = false;
 bool cameraThreadIsRunning = true;
+
+bool capturedNewImuData = false;
+bool imuThreadIsRunning = true;
 
 void cameraCaptureThread()
 {
@@ -47,7 +47,7 @@ void cameraCaptureThread()
         std::cerr << "Error al abrir la cámara." << std::endl;
     else
     {
-        for (size_t i = 0; i < cameraCaptureSize; i++)
+        for (size_t i = 0; i < LOOPLENGTH; i++)
         {
             cv::Mat frame;
             cap.read(frame);
@@ -84,11 +84,11 @@ void cameraDisplayThread()
 
     distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
 
-    size_t localCameraIndex = 0;
-
     mutex.lock();
     bool keepLooping = cameraThreadIsRunning;
     mutex.unlock();
+
+    //auto tempTime = std::chrono::steady_clock::now();
 
     while (keepLooping)
     {
@@ -96,6 +96,10 @@ void cameraDisplayThread()
         {
             CameraInput frame;
             cameraFramesBuffer.Dequeue(frame);
+
+            /*auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTime);
+            std::cout << "Time between captures (Camera): " << timePassedMilliseconds.count() << std::endl;
+            tempTime = frame.timeStamp;*/
 
             std::vector<int> markerIds;
             std::vector<std::vector<cv::Point2f>> markerCorners;
@@ -116,7 +120,6 @@ void cameraDisplayThread()
             }
 
             cv::imshow("draw axis", frame.frame);
-            localCameraIndex += 1;
             capturedNewFrame = false;
 
             cv::waitKey(33);
@@ -170,10 +173,8 @@ void imuThread()
 
         cv::waitKey(3000);
 
-        for (size_t i = 0; i < cameraCaptureSize; i++)
+        for (size_t i = 0; i < LOOPLENGTH; i++)
         {
-            std::cout << "Ite: " << i << std::endl;
-
             boost::system::error_code ec;
             boost::asio::read_until(serial, buffer, '\n', ec);
 
@@ -215,6 +216,7 @@ void imuThread()
                 }
 
                 imuDataBuffer.Queue(imuInput);
+                capturedNewImuData = true;
             }
         }
     }
@@ -224,21 +226,62 @@ void imuThread()
     }
 
     serial.close();
+
+    mutex.lock();
+    imuThreadIsRunning = false;
+    mutex.unlock();
+}
+
+void imuDisplayThread()
+{
+    mutex.lock();
+    bool keepLooping = imuThreadIsRunning;
+    mutex.unlock();
+
+    auto tempTime = std::chrono::steady_clock::now();
+
+    while (keepLooping)
+    {
+        if (capturedNewImuData)
+        {
+            ImuInput imuData;
+            imuDataBuffer.Dequeue(imuData);
+
+            /*std::cout << "X:" << imuData.accX << ","
+                      << "Y:" << imuData.accY << ","
+                      << "Z:" << imuData.accZ << "@"
+                      << "W:" << imuData.quatW << ","
+                      << "X:" << imuData.quatX << ","
+                      << "Y:" << imuData.quatY << ","
+                      << "Z:" << imuData.quatZ << std::endl;*/
+
+            auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTime);
+            std::cout << "Time between captures (IMU): " << timePassedMilliseconds.count() << std::endl;
+            tempTime = imuData.timeStamp;
+
+            capturedNewImuData = false;
+        }
+        mutex.lock();
+        keepLooping = imuThreadIsRunning;
+        mutex.unlock();
+    }
 }
 
 int main(int argc, char **argv)
 {
     // WINDOW *win;
-    // std::thread cameraCapture(cameraCaptureThread);
-    // std::thread cameraDisplay(cameraDisplayThread);
+    std::thread cameraCapture(cameraCaptureThread);
+    std::thread cameraDisplay(cameraDisplayThread);
     std::thread imu(imuThread);
+    std::thread imuDisplay(imuDisplayThread);
 
     // win = initscr();
     // clearok(win, TRUE);
 
-    // cameraCapture.join();
-    // cameraDisplay.join();
+    cameraCapture.join();
+    cameraDisplay.join();
     imu.join();
+    imuDisplay.join();
 
     /*while (true)
     {
@@ -261,7 +304,7 @@ int main(int argc, char **argv)
         start = end;
     }*/
 
-    for (size_t i = 0; i < imuDataBuffer.getT(); i++)
+    /*for (size_t i = 0; i < imuDataBuffer.getT(); i++)
     {
         ImuInput temp;
         imuDataBuffer.Dequeue(temp);
@@ -274,7 +317,7 @@ int main(int argc, char **argv)
                   << "X:" << temp.quatX << ","
                   << "Y:" << temp.quatY << ","
                   << "Z:" << temp.quatZ << std::endl;
-    }
+    }*/
 
     // endwin();
     return 0;
