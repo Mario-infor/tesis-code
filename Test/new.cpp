@@ -28,7 +28,7 @@ struct ImuInput
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
-size_t cameraCaptureSize = 100;
+size_t cameraCaptureSize = 1000;
 size_t indexCamera = 0;
 std::mutex mutex;
 // std::vector<CameraInput> cameraFramesList;
@@ -172,6 +172,8 @@ void imuThread()
 
         for (size_t i = 0; i < cameraCaptureSize; i++)
         {
+            std::cout << "Ite: " << i << std::endl;
+
             boost::system::error_code ec;
             boost::asio::read_until(serial, buffer, '\n', ec);
 
@@ -184,19 +186,33 @@ void imuThread()
                 std::string receivedData;
                 std::istream is(&buffer);
                 std::getline(is, receivedData);
-                
+
                 std::vector<float> parsedData;
                 parseImuData(receivedData, parsedData);
 
                 ImuInput imuInput;
-                imuInput.accX = parsedData[0];
-                imuInput.accY = parsedData[1];
-                imuInput.accZ = parsedData[2];
-                imuInput.quatW = parsedData[3];
-                imuInput.quatX = parsedData[4];
-                imuInput.quatY = parsedData[5];
-                imuInput.quatZ = parsedData[6];
                 imuInput.timeStamp = std::chrono::steady_clock::now();
+
+                if (parsedData.size() == 7)
+                {
+                    imuInput.accX = parsedData[0];
+                    imuInput.accY = parsedData[1];
+                    imuInput.accZ = parsedData[2];
+                    imuInput.quatW = parsedData[3];
+                    imuInput.quatX = parsedData[4];
+                    imuInput.quatY = parsedData[5];
+                    imuInput.quatZ = parsedData[6];
+                }
+                else
+                {
+                    imuInput.accX = 0;
+                    imuInput.accY = 0;
+                    imuInput.accZ = 0;
+                    imuInput.quatW = 0;
+                    imuInput.quatX = 0;
+                    imuInput.quatY = 0;
+                    imuInput.quatZ = 0;
+                }
 
                 imuDataBuffer.Queue(imuInput);
             }
@@ -224,13 +240,13 @@ int main(int argc, char **argv)
     // cameraDisplay.join();
     imu.join();
 
-    while (true)
+    /*while (true)
     {
         if (cv::waitKey(0) == 'q')
         {
             imuRun = false;
         }
-    }
+    }*/
 
     // auto start = cameraFramesList[0].timeStamp;
     /*CameraInput start;
@@ -249,10 +265,15 @@ int main(int argc, char **argv)
     {
         ImuInput temp;
         imuDataBuffer.Dequeue(temp);
-        //X:0.01,Y:0.00,Z:0.19@W:0.9999,X:-0.0130,Y:0.0082,Z:0.0000
-        std::cout << "X:" << temp.accX << "," << "Y:" << temp.accY << "," << "Z:" << temp.accZ << "@" 
-            << "W:" << temp.quatW << "," << "X:" << temp.quatX << "," << "Y:" << temp.quatY << ","
-            << "Z:" << temp.quatZ << "," << std::endl;
+        // X:0.01,Y:0.00,Z:0.19@W:0.9999,X:-0.0130,Y:0.0082,Z:0.0000
+        std::cout << "Ite: " << i << " "
+                  << "X:" << temp.accX << ","
+                  << "Y:" << temp.accY << ","
+                  << "Z:" << temp.accZ << "@"
+                  << "W:" << temp.quatW << ","
+                  << "X:" << temp.quatX << ","
+                  << "Y:" << temp.quatY << ","
+                  << "Z:" << temp.quatZ << std::endl;
     }
 
     // endwin();
