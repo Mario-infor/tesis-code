@@ -171,8 +171,6 @@ void imuThread()
         serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
         boost::asio::streambuf buffer;
 
-        cv::waitKey(3000);
-
         for (size_t i = 0; i < LOOPLENGTH; i++)
         {
             boost::system::error_code ec;
