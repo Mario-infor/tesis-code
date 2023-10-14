@@ -226,7 +226,9 @@ void imuThread()
                 }
 
                 imuDataBuffer.Queue(imuInput);
+                mutex.lock();
                 capturedNewImuData = true;
+                mutex.unlock();
             }
             mutex.lock();
             stop = stopProgram;
@@ -297,11 +299,17 @@ int main(int argc, char **argv)
     std::thread cameraCapture(cameraCaptureThread);
     std::thread cameraDisplay(cameraDisplayThread);
     std::thread imu(imuThread);
-    std::thread imuDisplay(imuDisplayThread);
+    // std::thread imuDisplay(imuDisplayThread);
 
     mutex.lock();
     bool stop = stopProgram;
     mutex.unlock();
+
+    WINDOW *win;
+    char buff[512];
+
+    win = initscr();
+    clearok(win, TRUE);
 
     while (!stop)
     {
@@ -310,19 +318,46 @@ int main(int argc, char **argv)
             stopProgram = true;
         }
 
-        usleep(100000);
+        usleep(100);
         mutex.lock();
         stop = stopProgram;
         mutex.unlock();
 
-        
+        auto tempTime = std::chrono::steady_clock::now();
+
+        mutex.lock();
+        if (capturedNewImuData)
+        {
+            ImuInput imuData;
+            imuDataBuffer.Dequeue(imuData);
+
+            auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTime);
+
+            wmove(win, 5, 3);
+            snprintf(buff, 511, "Acc[%010ld] = {%06.2f, %06.2f, %06.2f}", timePassedMilliseconds.count(), imuData.accX, imuData.accY, imuData.accZ);
+            waddstr(win, buff);
+
+            wmove(win, 7, 2);
+            snprintf(buff, 511, "Quat[%010ld] = {%06.2f, %06.2f, %06.2f, %06.2f}", timePassedMilliseconds.count(), imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
+            waddstr(win, buff);
+
+            wmove(win, 9, 2);
+            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMilliseconds.count());
+            waddstr(win, buff);
+
+            tempTime = imuData.timeStamp;
+            capturedNewImuData = false;
+            wrefresh(win);
+        }
+        mutex.unlock();
     }
 
     cameraCapture.join();
     cameraDisplay.join();
     imu.join();
-    imuDisplay.join();
+    // imuDisplay.join();
 
     endwin();
+
     return 0;
 }
