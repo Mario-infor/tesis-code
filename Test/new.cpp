@@ -297,19 +297,32 @@ int main(int argc, char **argv)
 {
 
     std::thread cameraCapture(cameraCaptureThread);
-    std::thread cameraDisplay(cameraDisplayThread);
+    //std::thread cameraDisplay(cameraDisplayThread);
     std::thread imu(imuThread);
     // std::thread imuDisplay(imuDisplayThread);
 
-    mutex.lock();
-    bool stop = stopProgram;
-    mutex.unlock();
+    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+
+    cv::Mat cameraMatrix, distCoeffs;
+
+    cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
+                    0, 660.76768, 242.771412,
+                    0, 0, 1);
+
+    distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
 
     WINDOW *win;
     char buff[512];
 
     win = initscr();
     clearok(win, TRUE);
+
+    mutex.lock();
+    bool stop = stopProgram;
+    mutex.unlock();
+
+    auto tempTimeImu = std::chrono::steady_clock::now();
+    auto tempTimeCamera = std::chrono::steady_clock::now();
 
     while (!stop)
     {
@@ -318,12 +331,12 @@ int main(int argc, char **argv)
             stopProgram = true;
         }
 
-        usleep(100);
+        //usleep(100);
         mutex.lock();
         stop = stopProgram;
         mutex.unlock();
 
-        auto tempTime = std::chrono::steady_clock::now();
+        
 
         mutex.lock();
         if (capturedNewImuData)
@@ -331,29 +344,66 @@ int main(int argc, char **argv)
             ImuInput imuData;
             imuDataBuffer.Dequeue(imuData);
 
-            auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTime);
+            auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
 
             wmove(win, 5, 3);
-            snprintf(buff, 511, "Acc[%010ld] = {%06.2f, %06.2f, %06.2f}", timePassedMilliseconds.count(), imuData.accX, imuData.accY, imuData.accZ);
+            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
             waddstr(win, buff);
 
             wmove(win, 7, 2);
-            snprintf(buff, 511, "Quat[%010ld] = {%06.2f, %06.2f, %06.2f, %06.2f}", timePassedMilliseconds.count(), imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
+            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
             waddstr(win, buff);
 
             wmove(win, 9, 2);
-            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMilliseconds.count());
+            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImu.count());
             waddstr(win, buff);
 
-            tempTime = imuData.timeStamp;
+            tempTimeImu = imuData.timeStamp;
             capturedNewImuData = false;
-            wrefresh(win);
         }
         mutex.unlock();
+
+        mutex.lock();
+        if (capturedNewFrame)
+        {
+            CameraInput frame;
+            cameraFramesBuffer.Dequeue(frame);
+
+            auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTimeCamera);
+
+            wmove(win, 12, 2);
+            snprintf(buff, 511, "Time between captures (Camera): %010ld", timePassedMillisecondsCamera.count());
+            waddstr(win, buff);
+
+            std::vector<int> markerIds;
+            std::vector<std::vector<cv::Point2f>> markerCorners;
+
+            cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
+
+            if (markerIds.size() > 0)
+            {
+                cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+
+                std::vector<cv::Vec3d> rvecs, tvecs;
+                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+
+                for (int i = 0; i < (int)rvecs.size(); i++)
+                {
+                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
+                }
+            }
+
+            cv::imshow("draw axis", frame.frame);
+            capturedNewFrame = false;
+
+            cv::waitKey(33);
+        }
+        mutex.unlock();
+        wrefresh(win);
     }
 
     cameraCapture.join();
-    cameraDisplay.join();
+    //cameraDisplay.join();
     imu.join();
     // imuDisplay.join();
 
