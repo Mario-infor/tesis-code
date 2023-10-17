@@ -39,7 +39,17 @@ bool stopProgram = false;
 
 void cameraCaptureThread()
 {
-    cv::VideoCapture cap(0);
+    #ifdef DJETSON
+        int WIDTH = 640;
+        int HEIGHT = 360;
+        int FPS = 60;
+        std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
+        cv::VideoCapture inputVideo;
+        inputVideo.open(pipeline, cv::CAP_GSTREAMER);
+    #else
+        cv::VideoCapture cap(0);
+    #endif
+    
 
     if (!cap.isOpened())
         std::cerr << "Error al abrir la cámara." << std::endl;
@@ -181,6 +191,15 @@ void parseImuData(std::string data, std::vector<float> &parsedData)
         }
     }
 }
+
+#ifdef DJETSON
+std::string get_tegra_pipeline(int width, int height, int fps)
+{
+    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
+           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
+           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+}
+#endif
 
 int main(int argc, char **argv)
 {
