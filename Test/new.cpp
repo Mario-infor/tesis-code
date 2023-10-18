@@ -1,12 +1,17 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <boost/asio.hpp>
 #include <chrono>
 #include <curses.h>
 #include <vector>
 #include <mutex>
 #include "RingBuffer.h"
+
+#ifdef INTEL
+#include <boost/asio.hpp>
+#else
+#include <BNO055-BBB_driver.h>
+#endif
 
 #define MAXLEN 512 // maximum buffer size
 #define LOOPLENGTH 1000
@@ -29,7 +34,7 @@ struct ImuInput
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
-std::mutex mutex;
+std::mutex mainMutex;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(LOOPLENGTH);
 RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(LOOPLENGTH);
 
@@ -48,9 +53,9 @@ void cameraCaptureThread()
         std::cerr << "Error al abrir la cámara." << std::endl;
     else
     {
-        mutex.lock();
+        mainMutex.lock();
         bool stop = stopProgram;
-        mutex.unlock();
+        mainMutex.unlock();
 
         while (!stop)
         {
@@ -70,14 +75,14 @@ void cameraCaptureThread()
                 cameraFramesBuffer.Queue(capture);
                 capturedNewFrame = true;
             }
-            mutex.lock();
+            mainMutex.lock();
             stop = stopProgram;
-            mutex.unlock();
+            mainMutex.unlock();
         }
     }
-    mutex.lock();
+    mainMutex.lock();
     cameraThreadIsRunning = false;
-    mutex.unlock();
+    mainMutex.unlock();
 }
 
 void cameraDisplayThread()
@@ -92,9 +97,9 @@ void cameraDisplayThread()
 
     distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
 
-    mutex.lock();
+    mainMutex.lock();
     bool keepLooping = cameraThreadIsRunning;
-    mutex.unlock();
+    mainMutex.unlock();
 
     // auto tempTime = std::chrono::steady_clock::now();
 
@@ -132,9 +137,9 @@ void cameraDisplayThread()
 
             cv::waitKey(33);
         }
-        mutex.lock();
+        mainMutex.lock();
         keepLooping = cameraThreadIsRunning;
-        mutex.unlock();
+        mainMutex.unlock();
     }
     cv::destroyAllWindows();
 }
@@ -179,9 +184,9 @@ void imuThread()
         serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
         boost::asio::streambuf buffer;
 
-        mutex.lock();
+        mainMutex.lock();
         bool stop = stopProgram;
-        mutex.unlock();
+        mainMutex.unlock();
 
         while (!stop)
         {
@@ -228,9 +233,9 @@ void imuThread()
                 imuDataBuffer.Queue(imuInput);
                 capturedNewImuData = true;
             }
-            mutex.lock();
+            mainMutex.lock();
             stop = stopProgram;
-            mutex.unlock();
+            mainMutex.unlock();
         }
     }
     catch (std::exception &e)
@@ -240,9 +245,9 @@ void imuThread()
 
     serial.close();
 
-    mutex.lock();
+    mainMutex.lock();
     imuThreadIsRunning = false;
-    mutex.unlock();
+    mainMutex.unlock();
 }
 
 void imuDisplayThread()
@@ -250,9 +255,9 @@ void imuDisplayThread()
     WINDOW *win;
     char buff[512];
 
-    mutex.lock();
+    mainMutex.lock();
     bool keepLooping = imuThreadIsRunning;
-    mutex.unlock();
+    mainMutex.unlock();
 
     win = initscr();
     clearok(win, TRUE);
@@ -284,9 +289,9 @@ void imuDisplayThread()
             capturedNewImuData = false;
             wrefresh(win);
         }
-        mutex.lock();
+        mainMutex.lock();
         keepLooping = imuThreadIsRunning;
-        mutex.unlock();
+        mainMutex.unlock();
     }
     endwin();
 }
@@ -299,9 +304,9 @@ int main(int argc, char **argv)
     std::thread imu(imuThread);
     std::thread imuDisplay(imuDisplayThread);
 
-    mutex.lock();
+    mainMutex.lock();
     bool stop = stopProgram;
-    mutex.unlock();
+    mainMutex.unlock();
 
     while (!stop)
     {
@@ -311,9 +316,9 @@ int main(int argc, char **argv)
         }
 
         usleep(100000);
-        mutex.lock();
+        mainMutex.lock();
         stop = stopProgram;
-        mutex.unlock();
+        mainMutex.unlock();
 
         
     }
