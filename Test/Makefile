@@ -8,4 +8,6 @@ $(PROJECT) : $(SRC)
 	$(CC) $(CPPFLAGS) $(SRC) -o $(PROJECT) $(LIBS)
 
 clean:
+
 	rm new_output
+
