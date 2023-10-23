@@ -1,12 +1,17 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <boost/asio.hpp>
 #include <chrono>
 #include <curses.h>
 #include <vector>
 #include <mutex>
 #include "RingBuffer.h"
+
+#ifdef INTEL
+#include <boost/asio.hpp>
+#else
+#include <BNO055-BBB_driver.h>
+#endif
 
 #define RINGBUFFERLENGTH 1000
 
