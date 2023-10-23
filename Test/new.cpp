@@ -7,10 +7,10 @@
 #include <mutex>
 #include "RingBuffer.h"
 
-#ifdef INTEL
-#include <boost/asio.hpp>
+#ifdef JETSON
+#include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
 #else
-#include <BNO055-BBB_driver.h>
+#include <boost/asio.hpp>
 #endif
 
 #define RINGBUFFERLENGTH 1000
@@ -35,8 +35,8 @@ struct ImuInput
 };
 
 std::mutex mainMutex;
-RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(LOOPLENGTH);
-RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(LOOPLENGTH);
+RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
+RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
 
 bool capturedNewFrame = false;
 bool cameraThreadIsRunning = true;
