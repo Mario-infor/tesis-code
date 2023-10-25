@@ -1,7 +1,6 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <boost/asio.hpp>
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -12,7 +11,9 @@
 #define DJETSON
 
 #ifdef DJETSON
-#include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
+    #include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
+#else
+    #include <boost/asio.hpp>
 #endif
 
 struct CameraInput
