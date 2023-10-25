@@ -56,8 +56,12 @@ struct ImuInputJetson
 
 std::mutex myMutex;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
-RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
-RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTH);
+
+#ifdef DJETSON
+    RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTH);
+#else
+    RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
+#endif
 
 bool capturedNewFrame = false;
 bool capturedNewImuData = false;
@@ -288,7 +292,13 @@ std::string get_tegra_pipeline(int width, int height, int fps)
 int main(int argc, char **argv)
 {
     std::thread cameraCapture(cameraCaptureThread);
-    std::thread imu(imuThread);
+
+    #ifdef DJETSON
+        std::thread imu(imuThreadJetson);
+    #else
+        std::thread imu(imuThread);
+    #endif
+    
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
@@ -327,24 +337,58 @@ int main(int argc, char **argv)
         myMutex.lock();
         if (capturedNewImuData)
         {
-            ImuInput imuData;
-            imuDataBuffer.Dequeue(imuData);
+            #ifdef DJETSON
+                ImuInputJetson imuDataJetson;
+                imuDataJetsonBuffer.Dequeue(imuDataJetson);
 
-            auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
+                auto timePassedMillisecondsImuJetson = std::chrono::duration_cast<std::chrono::milliseconds>(imuDataJetson.timeStamp - tempTimeImu);
 
-            wmove(win, 5, 3);
-            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
-            waddstr(win, buff);
+                wmove(win, 5, 2);
+                snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
+                waddstr(win, buff);
 
-            wmove(win, 7, 2);
-            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
-            waddstr(win, buff);
+                wmove(win, 7, 2);
+                snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerX, imuDataJetson.eulerY, imuDataJetson.eulerZ);
+                waddstr(win, buff);
 
-            wmove(win, 9, 2);
-            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImu.count());
-            waddstr(win, buff);
+                wmove(win, 9, 2);
+                snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuDataJetson.quatX, 
+                            imuDataJetson.quatY, imuDataJetson.quatZ, imuDataJetson.quatW);
+                waddstr(win, buff);
 
-            tempTimeImu = imuData.timeStamp;
+                wmove(win, 11, 3);
+                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accX, imuDataJetson.accY, imuDataJetson.accZ);
+                waddstr(win, buff);
+
+                wmove(win, 13, 2);
+                snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
+                waddstr(win, buff);      
+
+                wmove(win, 15, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImuJetson.count());
+                waddstr(win, buff);
+
+
+            #else
+                ImuInput imuData;
+                imuDataBuffer.Dequeue(imuData);
+
+                auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
+
+                wmove(win, 5, 3);
+                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
+                waddstr(win, buff);
+
+                wmove(win, 7, 2);
+                snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
+                waddstr(win, buff);
+
+                wmove(win, 9, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImu.count());
+                waddstr(win, buff);
+
+                tempTimeImu = imuData.timeStamp;
+            #endif
             capturedNewImuData = false;
         }
         myMutex.unlock();
@@ -357,7 +401,7 @@ int main(int argc, char **argv)
 
             auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTimeCamera);
 
-            wmove(win, 12, 2);
+            wmove(win, 19, 2);
             snprintf(buff, 511, "Time between captures (Camera): %010ld", timePassedMillisecondsCamera.count());
             waddstr(win, buff);
 
