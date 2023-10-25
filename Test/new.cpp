@@ -1,20 +1,14 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
+#include <boost/asio.hpp>
 #include <chrono>
 #include <curses.h>
 #include <vector>
 #include <mutex>
 #include "RingBuffer.h"
 
-#ifdef JETSON
-#include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
-#else
-#include <boost/asio.hpp>
-#endif
-
 #define RINGBUFFERLENGTH 1000
-
 
 struct CameraInput
 {
@@ -34,28 +28,36 @@ struct ImuInput
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
-std::mutex mainMutex;
+std::mutex mutex;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
 RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
 
 bool capturedNewFrame = false;
-bool cameraThreadIsRunning = true;
-
 bool capturedNewImuData = false;
 bool imuThreadIsRunning = true;
 bool stopProgram = false;
 
 void cameraCaptureThread()
 {
-    cv::VideoCapture cap(0);
+    #ifdef DJETSON
+        int WIDTH = 640;
+        int HEIGHT = 360;
+        int FPS = 60;
+        std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
+        cv::VideoCapture inputVideo;
+        inputVideo.open(pipeline, cv::CAP_GSTREAMER);
+    #else
+        cv::VideoCapture cap(0);
+    #endif
+    
 
     if (!cap.isOpened())
         std::cerr << "Error al abrir la cámara." << std::endl;
     else
     {
-        mainMutex.lock();
+        mutex.lock();
         bool stop = stopProgram;
-        mainMutex.unlock();
+        mutex.unlock();
 
         while (!stop)
         {
@@ -75,100 +77,9 @@ void cameraCaptureThread()
                 cameraFramesBuffer.Queue(capture);
                 capturedNewFrame = true;
             }
-            mainMutex.lock();
+            mutex.lock();
             stop = stopProgram;
-            mainMutex.unlock();
-        }
-    }
-    mainMutex.lock();
-    cameraThreadIsRunning = false;
-    mainMutex.unlock();
-}
-
-void cameraDisplayThread()
-{
-    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
-
-    cv::Mat cameraMatrix, distCoeffs;
-
-    cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
-                    0, 660.76768, 242.771412,
-                    0, 0, 1);
-
-    distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
-
-    mainMutex.lock();
-    bool keepLooping = cameraThreadIsRunning;
-    mainMutex.unlock();
-
-    // auto tempTime = std::chrono::steady_clock::now();
-
-    while (keepLooping)
-    {
-        if (capturedNewFrame)
-        {
-            CameraInput frame;
-            cameraFramesBuffer.Dequeue(frame);
-
-            /*auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTime);
-            std::cout << "Time between captures (Camera): " << timePassedMilliseconds.count() << std::endl;
-            tempTime = frame.timeStamp;*/
-
-            std::vector<int> markerIds;
-            std::vector<std::vector<cv::Point2f>> markerCorners;
-
-            cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
-
-            if (markerIds.size() > 0)
-            {
-                cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
-
-                std::vector<cv::Vec3d> rvecs, tvecs;
-                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
-
-                for (int i = 0; i < (int)rvecs.size(); i++)
-                {
-                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
-                }
-            }
-
-            cv::imshow("draw axis", frame.frame);
-            capturedNewFrame = false;
-
-            cv::waitKey(33);
-        }
-        mainMutex.lock();
-        keepLooping = cameraThreadIsRunning;
-        mainMutex.unlock();
-    }
-    cv::destroyAllWindows();
-}
-
-void parseImuData(std::string data, std::vector<float> &parsedData)
-{
-    std::stringstream ss(data);
-    std::vector<std::string> splitData;
-    std::string temp;
-
-    while (std::getline(ss, temp, ','))
-    {
-        splitData.push_back(temp);
-    }
-
-    for (const std::string &item : splitData)
-    {
-        try
-        {
-            float number = std::stof(item);
-            parsedData.push_back(number);
-        }
-        catch (const std::invalid_argument &e)
-        {
-            std::cerr << "Error: Could not convert string to float. " << e.what() << std::endl;
-        }
-        catch (const std::out_of_range &e)
-        {
-            std::cerr << "Error: Value is out of float range. " << e.what() << std::endl;
+            mutex.unlock();
         }
     }
 }
@@ -184,9 +95,9 @@ void imuThread()
         serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
         boost::asio::streambuf buffer;
 
-        mainMutex.lock();
+        mutex.lock();
         bool stop = stopProgram;
-        mainMutex.unlock();
+        mutex.unlock();
 
         while (!stop)
         {
@@ -231,11 +142,13 @@ void imuThread()
                 }
 
                 imuDataBuffer.Queue(imuInput);
+                mutex.lock();
                 capturedNewImuData = true;
+                mutex.unlock();
             }
-            mainMutex.lock();
+            mutex.lock();
             stop = stopProgram;
-            mainMutex.unlock();
+            mutex.unlock();
         }
     }
     catch (std::exception &e)
@@ -245,68 +158,79 @@ void imuThread()
 
     serial.close();
 
-    mainMutex.lock();
+    mutex.lock();
     imuThreadIsRunning = false;
-    mainMutex.unlock();
+    mutex.unlock();
 }
 
-void imuDisplayThread()
+void parseImuData(std::string data, std::vector<float> &parsedData)
 {
-    WINDOW *win;
-    char buff[512];
+    std::stringstream ss(data);
+    std::vector<std::string> splitData;
+    std::string temp;
 
-    mainMutex.lock();
-    bool keepLooping = imuThreadIsRunning;
-    mainMutex.unlock();
-
-    win = initscr();
-    clearok(win, TRUE);
-
-    auto tempTime = std::chrono::steady_clock::now();
-
-    while (keepLooping)
+    while (std::getline(ss, temp, ','))
     {
-        if (capturedNewImuData)
-        {
-            ImuInput imuData;
-            imuDataBuffer.Dequeue(imuData);
-
-            auto timePassedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTime);
-
-            wmove(win, 5, 3);
-            snprintf(buff, 511, "Acc[%010ld] = {%06.2f, %06.2f, %06.2f}", timePassedMilliseconds.count(), imuData.accX, imuData.accY, imuData.accZ);
-            waddstr(win, buff);
-
-            wmove(win, 7, 2);
-            snprintf(buff, 511, "Quat[%010ld] = {%06.2f, %06.2f, %06.2f, %06.2f}", timePassedMilliseconds.count(), imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
-            waddstr(win, buff);
-
-            wmove(win, 9, 2);
-            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMilliseconds.count());
-            waddstr(win, buff);
-            tempTime = imuData.timeStamp;
-
-            capturedNewImuData = false;
-            wrefresh(win);
-        }
-        mainMutex.lock();
-        keepLooping = imuThreadIsRunning;
-        mainMutex.unlock();
+        splitData.push_back(temp);
     }
-    endwin();
+
+    for (const std::string &item : splitData)
+    {
+        try
+        {
+            float number = std::stof(item);
+            parsedData.push_back(number);
+        }
+        catch (const std::invalid_argument &e)
+        {
+            std::cerr << "Error: Could not convert string to float. " << e.what() << std::endl;
+        }
+        catch (const std::out_of_range &e)
+        {
+            std::cerr << "Error: Value is out of float range. " << e.what() << std::endl;
+        }
+    }
 }
+
+#ifdef DJETSON
+std::string get_tegra_pipeline(int width, int height, int fps)
+{
+    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
+           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
+           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+}
+#endif
 
 int main(int argc, char **argv)
 {
 
     std::thread cameraCapture(cameraCaptureThread);
-    std::thread cameraDisplay(cameraDisplayThread);
+    //std::thread cameraDisplay(cameraDisplayThread);
     std::thread imu(imuThread);
-    std::thread imuDisplay(imuDisplayThread);
+    // std::thread imuDisplay(imuDisplayThread);
 
-    mainMutex.lock();
+    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+
+    cv::Mat cameraMatrix, distCoeffs;
+
+    cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
+                    0, 660.76768, 242.771412,
+                    0, 0, 1);
+
+    distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
+
+    WINDOW *win;
+    char buff[512];
+
+    win = initscr();
+    clearok(win, TRUE);
+
+    mutex.lock();
     bool stop = stopProgram;
-    mainMutex.unlock();
+    mutex.unlock();
+
+    auto tempTimeImu = std::chrono::steady_clock::now();
+    auto tempTimeCamera = std::chrono::steady_clock::now();
 
     while (!stop)
     {
@@ -315,19 +239,82 @@ int main(int argc, char **argv)
             stopProgram = true;
         }
 
-        usleep(100000);
-        mainMutex.lock();
+        mutex.lock();
         stop = stopProgram;
-        mainMutex.unlock();
+        mutex.unlock();
 
-        
+        mutex.lock();
+        if (capturedNewImuData)
+        {
+            ImuInput imuData;
+            imuDataBuffer.Dequeue(imuData);
+
+            auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
+
+            wmove(win, 5, 3);
+            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
+            waddstr(win, buff);
+
+            wmove(win, 7, 2);
+            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
+            waddstr(win, buff);
+
+            wmove(win, 9, 2);
+            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImu.count());
+            waddstr(win, buff);
+
+            tempTimeImu = imuData.timeStamp;
+            capturedNewImuData = false;
+        }
+        mutex.unlock();
+
+        mutex.lock();
+        if (capturedNewFrame)
+        {
+            CameraInput frame;
+            cameraFramesBuffer.Dequeue(frame);
+
+            auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTimeCamera);
+
+            wmove(win, 12, 2);
+            snprintf(buff, 511, "Time between captures (Camera): %010ld", timePassedMillisecondsCamera.count());
+            waddstr(win, buff);
+
+            std::vector<int> markerIds;
+            std::vector<std::vector<cv::Point2f>> markerCorners;
+
+            cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
+
+            if (markerIds.size() > 0)
+            {
+                cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+
+                std::vector<cv::Vec3d> rvecs, tvecs;
+                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+
+                for (int i = 0; i < (int)rvecs.size(); i++)
+                {
+                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
+                }
+            }
+
+            cv::imshow("draw axis", frame.frame);
+            
+            tempTimeCamera = frame.timeStamp;
+            capturedNewFrame = false;
+
+            cv::waitKey(33);
+        }
+        mutex.unlock();
+        wrefresh(win);
     }
 
     cameraCapture.join();
-    cameraDisplay.join();
+    //cameraDisplay.join();
     imu.join();
-    imuDisplay.join();
+    // imuDisplay.join();
 
     endwin();
+
     return 0;
 }
