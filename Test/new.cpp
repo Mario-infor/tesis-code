@@ -4,14 +4,14 @@
 #include <chrono>
 #include <curses.h>
 #include <vector>
+#include <thread>
 #include <mutex>
 #include "RingBuffer.h"
 
-#define RINGBUFFERLENGTH 1000
-#define DJETSON
+#define RINGBUFFERLENGTH 100
 
-#ifdef DJETSON
-    #include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
+#ifdef JETSON
+    #include <BNO055-BBB_driver.h>
 #else
     #include <boost/asio.hpp>
 #endif
@@ -58,7 +58,7 @@ struct ImuInputJetson
 std::mutex myMutex;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
 
-#ifdef DJETSON
+#ifdef JETSON
     RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTH);
 #else
     RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
@@ -69,9 +69,19 @@ bool capturedNewImuData = false;
 bool imuThreadIsRunning = true;
 bool stopProgram = false;
 
+
+#ifdef JETSON
+std::string get_tegra_pipeline(int width, int height, int fps)
+{
+    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
+           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
+           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+}
+#endif
+
 void cameraCaptureThread()
 {
-#ifdef DJETSON
+#ifdef JETSON
     int WIDTH = 640;
     int HEIGHT = 360;
     int FPS = 60;
@@ -144,7 +154,7 @@ void parseImuData(std::string data, std::vector<float> &parsedData)
     }
 }
 
-#ifdef DJETSON
+#ifdef JETSON
 
 void imuThreadJetson()
 {
@@ -281,20 +291,11 @@ void imuThread()
 
 #endif
 
-#ifdef DJETSON
-std::string get_tegra_pipeline(int width, int height, int fps)
-{
-    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
-           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
-           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
-}
-#endif
-
 int main(int argc, char **argv)
 {
     std::thread cameraCapture(cameraCaptureThread);
 
-    #ifdef DJETSON
+    #ifdef JETSON
         std::thread imu(imuThreadJetson);
     #else
         std::thread imu(imuThread);
@@ -314,15 +315,16 @@ int main(int argc, char **argv)
     WINDOW *win;
     char buff[512];
 
-    win = initscr();
-    clearok(win, TRUE);
-
+    
     myMutex.lock();
     bool stop = stopProgram;
     myMutex.unlock();
 
     auto tempTimeImu = std::chrono::steady_clock::now();
     auto tempTimeCamera = std::chrono::steady_clock::now();
+    
+    win = initscr();
+    clearok(win, TRUE);
 
     while (!stop)
     {
@@ -338,7 +340,7 @@ int main(int argc, char **argv)
         myMutex.lock();
         if (capturedNewImuData)
         {
-            #ifdef DJETSON
+            #ifdef JETSON
                 ImuInputJetson imuDataJetson;
                 imuDataJetsonBuffer.Dequeue(imuDataJetson);
 
@@ -369,6 +371,7 @@ int main(int argc, char **argv)
                 snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImuJetson.count());
                 waddstr(win, buff);
 
+                tempTimeImu = imuDataJetson.timeStamp;
 
             #else
                 ImuInput imuData;
@@ -424,7 +427,7 @@ int main(int argc, char **argv)
                 }
             }
 
-            cv::imshow("draw axis", frame.frame);
+            //cv::imshow("draw axis", frame.frame);
 
             tempTimeCamera = frame.timeStamp;
             capturedNewFrame = false;
@@ -433,6 +436,7 @@ int main(int argc, char **argv)
         }
         myMutex.unlock();
         wrefresh(win);
+	wclear(win);
     }
 
     cameraCapture.join();

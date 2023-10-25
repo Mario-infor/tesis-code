@@ -1,10 +1,10 @@
 BNO055_DIR = $(HOME)/Mario/src/BNO055-BBB_IMU-Driver
-CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include
+CPPFLAGS = -g -Wall -std=c++11 -DJETSON -I $(BNO055_DIR)/include 
 
 CC = g++ 
 PROJECT = new_output
 SRC = new.cpp
-LIBS = `pkg-config --cflags --libs opencv` -lncurses $(BNO055_DIR)/objs/BNO055-BBB_driver.o
+LIBS = `pkg-config --cflags --libs opencv` -lncurses $(BNO055_DIR)/objs/BNO055-BBB_driver.o -lpthread
 $(PROJECT) : $(SRC)
 	$(CC) $(CPPFLAGS) $(SRC) -o $(PROJECT) $(LIBS)
 
