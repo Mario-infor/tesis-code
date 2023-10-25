@@ -8,6 +8,10 @@
 #include <mutex>
 #include "RingBuffer.h"
 
+#ifdef DJETSON
+        #include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
+#endif
+
 #define RINGBUFFERLENGTH 1000
 
 struct CameraInput
@@ -80,6 +84,35 @@ void cameraCaptureThread()
             mutex.lock();
             stop = stopProgram;
             mutex.unlock();
+        }
+    }
+}
+
+void parseImuData(std::string data, std::vector<float> &parsedData)
+{
+    std::stringstream ss(data);
+    std::vector<std::string> splitData;
+    std::string temp;
+
+    while (std::getline(ss, temp, ','))
+    {
+        splitData.push_back(temp);
+    }
+
+    for (const std::string &item : splitData)
+    {
+        try
+        {
+            float number = std::stof(item);
+            parsedData.push_back(number);
+        }
+        catch (const std::invalid_argument &e)
+        {
+            std::cerr << "Error: Could not convert string to float. " << e.what() << std::endl;
+        }
+        catch (const std::out_of_range &e)
+        {
+            std::cerr << "Error: Value is out of float range. " << e.what() << std::endl;
         }
     }
 }
@@ -163,35 +196,6 @@ void imuThread()
     mutex.unlock();
 }
 
-void parseImuData(std::string data, std::vector<float> &parsedData)
-{
-    std::stringstream ss(data);
-    std::vector<std::string> splitData;
-    std::string temp;
-
-    while (std::getline(ss, temp, ','))
-    {
-        splitData.push_back(temp);
-    }
-
-    for (const std::string &item : splitData)
-    {
-        try
-        {
-            float number = std::stof(item);
-            parsedData.push_back(number);
-        }
-        catch (const std::invalid_argument &e)
-        {
-            std::cerr << "Error: Could not convert string to float. " << e.what() << std::endl;
-        }
-        catch (const std::out_of_range &e)
-        {
-            std::cerr << "Error: Value is out of float range. " << e.what() << std::endl;
-        }
-    }
-}
-
 #ifdef DJETSON
 std::string get_tegra_pipeline(int width, int height, int fps)
 {
@@ -204,10 +208,14 @@ std::string get_tegra_pipeline(int width, int height, int fps)
 int main(int argc, char **argv)
 {
 
+    // Obtiene la versión de OpenCV como una cadena
+    std::string version = cv::getVersionString();
+
+    // Imprime la versión en la consola
+    std::cout << "OpenCV Version: " << version << std::endl;
+
     std::thread cameraCapture(cameraCaptureThread);
-    //std::thread cameraDisplay(cameraDisplayThread);
     std::thread imu(imuThread);
-    // std::thread imuDisplay(imuDisplayThread);
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
@@ -310,9 +318,7 @@ int main(int argc, char **argv)
     }
 
     cameraCapture.join();
-    //cameraDisplay.join();
     imu.join();
-    // imuDisplay.join();
 
     endwin();
 
