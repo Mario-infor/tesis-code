@@ -8,11 +8,12 @@
 #include <mutex>
 #include "RingBuffer.h"
 
-#ifdef DJETSON
-        #include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
-#endif
-
 #define RINGBUFFERLENGTH 1000
+#define DJETSON
+
+#ifdef DJETSON
+#include "../../join-tesis-driver-code/driver-code/BNO055-BBB_IMU-Driver/include/BNO055-BBB_driver.h"
+#endif
 
 struct CameraInput
 {
@@ -32,9 +33,31 @@ struct ImuInput
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
-std::mutex mutex;
+struct ImuInputJetson
+{
+    float gyroX;
+    float gyroY;
+    float gyroZ;
+    float eulerX;
+    float eulerY;
+    float eulerZ;
+    float quatX;
+    float quatY;
+    float quatZ;
+    float quatW;
+    float accX;
+    float accY;
+    float accZ;
+    float gravX;
+    float gravY;
+    float gravZ;
+    std::chrono::time_point<std::chrono::steady_clock> timeStamp;
+};
+
+std::mutex myMutex;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
 RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
+RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTH);
 
 bool capturedNewFrame = false;
 bool capturedNewImuData = false;
@@ -43,25 +66,24 @@ bool stopProgram = false;
 
 void cameraCaptureThread()
 {
-    #ifdef DJETSON
-        int WIDTH = 640;
-        int HEIGHT = 360;
-        int FPS = 60;
-        std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
-        cv::VideoCapture inputVideo;
-        inputVideo.open(pipeline, cv::CAP_GSTREAMER);
-    #else
-        cv::VideoCapture cap(0);
-    #endif
-    
+#ifdef DJETSON
+    int WIDTH = 640;
+    int HEIGHT = 360;
+    int FPS = 60;
+    std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
+    cv::VideoCapture cap;
+    cap.open(pipeline, cv::CAP_GSTREAMER);
+#else
+    cv::VideoCapture cap(0);
+#endif
 
     if (!cap.isOpened())
         std::cerr << "Error al abrir la cámara." << std::endl;
     else
     {
-        mutex.lock();
+        myMutex.lock();
         bool stop = stopProgram;
-        mutex.unlock();
+        myMutex.unlock();
 
         while (!stop)
         {
@@ -81,9 +103,9 @@ void cameraCaptureThread()
                 cameraFramesBuffer.Queue(capture);
                 capturedNewFrame = true;
             }
-            mutex.lock();
+            myMutex.lock();
             stop = stopProgram;
-            mutex.unlock();
+            myMutex.unlock();
         }
     }
 }
@@ -117,6 +139,62 @@ void parseImuData(std::string data, std::vector<float> &parsedData)
     }
 }
 
+#ifdef DJETSON
+
+void imuThreadJetson()
+{
+    int cont = 0;
+    bool flag;
+    char filename[] = "/dev/i2c-1";
+    BNO055 sensors;
+    sensors.openDevice(filename);
+
+    do
+    {
+        sensors.readCalibVals();
+        flag = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
+    } while (cont++ < 2000 && !flag);
+
+    myMutex.lock();
+    bool stop = stopProgram;
+    myMutex.unlock();
+
+    while (!stop)
+    {
+        sensors.readAll();
+
+        ImuInputJetson imuInputJetson;
+        imuInputJetson.timeStamp = std::chrono::steady_clock::now();
+
+        imuInputJetson.gyroX = sensors.gyroVect.vi[0] * 0.01;
+        imuInputJetson.gyroY = sensors.gyroVect.vi[1] * 0.01;
+        imuInputJetson.gyroZ = sensors.gyroVect.vi[2] * 0.01;
+        imuInputJetson.eulerX = sensors.eOrientation.vi[0] * sensors.Scale;
+        imuInputJetson.eulerY = sensors.eOrientation.vi[1] * sensors.Scale;
+        imuInputJetson.eulerZ = sensors.eOrientation.vi[2] * sensors.Scale;
+        imuInputJetson.quatX = sensors.qOrientation.vi[0] * sensors.Scale;
+        imuInputJetson.quatY = sensors.qOrientation.vi[1] * sensors.Scale;
+        imuInputJetson.quatZ = sensors.qOrientation.vi[2] * sensors.Scale;
+        imuInputJetson.quatW = sensors.qOrientation.vi[3] * sensors.Scale;
+        imuInputJetson.accX = sensors.accelVect.vi[0] * sensors.Scale;
+        imuInputJetson.accY = sensors.accelVect.vi[1] * sensors.Scale;
+        imuInputJetson.accZ = sensors.accelVect.vi[2] * sensors.Scale;
+        imuInputJetson.gravX = sensors.gravVect.vi[0] * 0.01;
+        imuInputJetson.gravY = sensors.gravVect.vi[1] * 0.01;
+        imuInputJetson.gravZ = sensors.gravVect.vi[2] * 0.01;
+
+        imuDataJetsonBuffer.Queue(imuInputJetson);
+        myMutex.lock();
+        capturedNewImuData = true;
+        stop = stopProgram;
+        myMutex.unlock();
+    }
+    myMutex.lock();
+    stop = stopProgram;
+    myMutex.unlock();
+}
+
+#else
 void imuThread()
 {
     boost::asio::io_service io;
@@ -128,9 +206,9 @@ void imuThread()
         serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
         boost::asio::streambuf buffer;
 
-        mutex.lock();
+        myMutex.lock();
         bool stop = stopProgram;
-        mutex.unlock();
+        myMutex.unlock();
 
         while (!stop)
         {
@@ -175,13 +253,13 @@ void imuThread()
                 }
 
                 imuDataBuffer.Queue(imuInput);
-                mutex.lock();
+                myMutex.lock();
                 capturedNewImuData = true;
-                mutex.unlock();
+                myMutex.unlock();
             }
-            mutex.lock();
+            myMutex.lock();
             stop = stopProgram;
-            mutex.unlock();
+            myMutex.unlock();
         }
     }
     catch (std::exception &e)
@@ -191,10 +269,12 @@ void imuThread()
 
     serial.close();
 
-    mutex.lock();
+    myMutex.lock();
     imuThreadIsRunning = false;
-    mutex.unlock();
+    myMutex.unlock();
 }
+
+#endif
 
 #ifdef DJETSON
 std::string get_tegra_pipeline(int width, int height, int fps)
@@ -207,13 +287,6 @@ std::string get_tegra_pipeline(int width, int height, int fps)
 
 int main(int argc, char **argv)
 {
-
-    // Obtiene la versión de OpenCV como una cadena
-    std::string version = cv::getVersionString();
-
-    // Imprime la versión en la consola
-    std::cout << "OpenCV Version: " << version << std::endl;
-
     std::thread cameraCapture(cameraCaptureThread);
     std::thread imu(imuThread);
 
@@ -233,9 +306,9 @@ int main(int argc, char **argv)
     win = initscr();
     clearok(win, TRUE);
 
-    mutex.lock();
+    myMutex.lock();
     bool stop = stopProgram;
-    mutex.unlock();
+    myMutex.unlock();
 
     auto tempTimeImu = std::chrono::steady_clock::now();
     auto tempTimeCamera = std::chrono::steady_clock::now();
@@ -247,11 +320,11 @@ int main(int argc, char **argv)
             stopProgram = true;
         }
 
-        mutex.lock();
+        myMutex.lock();
         stop = stopProgram;
-        mutex.unlock();
+        myMutex.unlock();
 
-        mutex.lock();
+        myMutex.lock();
         if (capturedNewImuData)
         {
             ImuInput imuData;
@@ -274,9 +347,9 @@ int main(int argc, char **argv)
             tempTimeImu = imuData.timeStamp;
             capturedNewImuData = false;
         }
-        mutex.unlock();
+        myMutex.unlock();
 
-        mutex.lock();
+        myMutex.lock();
         if (capturedNewFrame)
         {
             CameraInput frame;
@@ -307,13 +380,13 @@ int main(int argc, char **argv)
             }
 
             cv::imshow("draw axis", frame.frame);
-            
+
             tempTimeCamera = frame.timeStamp;
             capturedNewFrame = false;
 
             cv::waitKey(33);
         }
-        mutex.unlock();
+        myMutex.unlock();
         wrefresh(win);
     }
 
