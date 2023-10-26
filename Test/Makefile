@@ -1,4 +1,4 @@
-CPPFLAGS = -g -Wall -DJETSON
+CPPFLAGS = -g -Wall
 
 CC = g++ 
 PROJECT = new_output

@@ -2,20 +2,21 @@
 #include <opencv2/aruco.hpp>
 #include <iostream>
 #include <chrono>
+#include <boost/asio.hpp>
 #include <curses.h>
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <fstream>
 #include "RingBuffer.h"
 
-#define RINGBUFFERLENGTHCAMERA 100
-#define RINGBUFFERLENGTHIMU 1000
-#define JETSON
+#define RINGBUFFERLENGTHCAMERA 50
+#define RINGBUFFERLENGTHIMU 100
 
 #ifdef JETSON
 #include <BNO055-BBB_driver.h>
 #else
-#include <boost/asio.hpp>
+// #include <boost/asio.hpp>
 #endif
 
 struct CameraInput
@@ -61,7 +62,7 @@ struct ImuInputJetson
 };
 
 std::mutex myMutex;
-RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
+RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTHCAMERA);
 
 #ifdef JETSON
 RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTHIMU);
@@ -69,8 +70,10 @@ RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RING
 RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTHIMU);
 #endif
 
+std::string dirCameraFolder = "./Data/Camera/";
+std::string dirIMUFolder = "./Data/IMU/";
 bool stopProgram = false;
-bool doneCalibrating;
+bool doneCalibrating = false;
 
 #ifdef JETSON
 std::string get_tegra_pipeline(int width, int height, int fps)
@@ -106,6 +109,7 @@ void cameraCaptureThread()
 
         while (!stop && index < RINGBUFFERLENGTHCAMERA)
         {
+            std::cout << "Camera: " << index << std::endl;
             myMutex.lock();
             if (doneCalibrating)
             {
@@ -125,7 +129,6 @@ void cameraCaptureThread()
                     capture.timeStamp = std::chrono::steady_clock::now();
 
                     cameraFramesBuffer.Queue(capture);
-                    capturedNewFrame = true;
                     index++;
                 }
 
@@ -243,10 +246,16 @@ void imuThread()
         bool stop = stopProgram;
         myMutex.unlock();
 
+        int index = 0;
+
         while (!stop && index < RINGBUFFERLENGTHIMU)
         {
+            std::cout << "IMU: " << index << std::endl;
             boost::system::error_code ec;
             boost::asio::read_until(serial, buffer, '\n', ec);
+
+            ImuInput imuInput;
+            imuInput.timeStamp = std::chrono::steady_clock::now();
 
             if (ec)
             {
@@ -261,11 +270,9 @@ void imuThread()
                 std::vector<float> parsedData;
                 parseImuData(receivedData, parsedData);
 
-                ImuInput imuInput;
-                imuInput.timeStamp = std::chrono::steady_clock::now();
-
                 if (parsedData.size() == 7)
                 {
+                    imuInput.index = index;
                     imuInput.accX = parsedData[0];
                     imuInput.accY = parsedData[1];
                     imuInput.accZ = parsedData[2];
@@ -273,9 +280,14 @@ void imuThread()
                     imuInput.quatX = parsedData[4];
                     imuInput.quatY = parsedData[5];
                     imuInput.quatZ = parsedData[6];
+
+                    myMutex.lock();
+                    doneCalibrating = true;
+                    myMutex.unlock();
                 }
                 else
                 {
+                    imuInput.index = index;
                     imuInput.accX = 0;
                     imuInput.accY = 0;
                     imuInput.accZ = 0;
@@ -284,11 +296,8 @@ void imuThread()
                     imuInput.quatY = 0;
                     imuInput.quatZ = 0;
                 }
-
+                index++;
                 imuDataBuffer.Queue(imuInput);
-                myMutex.lock();
-                capturedNewImuData = true;
-                myMutex.unlock();
             }
             myMutex.lock();
             stop = stopProgram;
@@ -305,6 +314,72 @@ void imuThread()
 
 #endif
 
+void cameraDataWrite()
+{
+    std::ofstream cameraTimeFile(dirCameraFolder + "cameraTime", std::ios::out);
+    auto tempTimeCameraWrite = std::chrono::steady_clock::now();
+
+    if (cameraTimeFile.is_open())
+    {
+        while (!cameraFramesBuffer.QueueIsEmpty())
+        {
+            CameraInput tempFrame;
+            cameraFramesBuffer.Dequeue(tempFrame);
+            std::string imageName = "frame_" + std::to_string(tempFrame.index) + ".png";
+            cv::imwrite(dirCameraFolder + imageName, tempFrame.frame);
+
+            if (tempFrame.index != 0)
+            {
+                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempFrame.timeStamp - tempTimeCameraWrite);
+                cameraTimeFile << timePassedMillisecondsCamera.count() << std::endl;
+            }
+            else
+            {
+                cameraTimeFile << 0 << std::endl;
+            }
+
+            tempTimeCameraWrite = tempFrame.timeStamp;
+        }
+    }
+}
+
+void IMUDataWrite()
+{
+    std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
+    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
+    auto tempTimeIMUWrite = std::chrono::steady_clock::now();
+
+    if (IMUTimeFile.is_open() && IMUDataFile.is_open())
+    {
+        while (!imuDataBuffer.QueueIsEmpty())
+        {
+            ImuInput tempIMU;
+            imuDataBuffer.Dequeue(tempIMU);
+
+            if (tempIMU.index != 0)
+            {
+                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempIMU.timeStamp - tempTimeIMUWrite);
+                IMUTimeFile << timePassedMillisecondsCamera.count() << std::endl;
+            }
+            else
+            {
+                IMUTimeFile << 0 << std::endl;
+            }
+            
+            IMUDataFile << tempIMU.index << std::endl;
+            IMUDataFile << tempIMU.accX << std::endl;
+            IMUDataFile << tempIMU.accY << std::endl;
+            IMUDataFile << tempIMU.accZ << std::endl;
+            IMUDataFile << tempIMU.quatW << std::endl;
+            IMUDataFile << tempIMU.quatX << std::endl;
+            IMUDataFile << tempIMU.quatY << std::endl;
+            IMUDataFile << tempIMU.quatZ << std::endl;
+
+            tempTimeIMUWrite = tempIMU.timeStamp;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     std::thread cameraCapture(cameraCaptureThread);
@@ -317,6 +392,9 @@ int main(int argc, char **argv)
 
     cameraCapture.join();
     imu.join();
+
+    cameraDataWrite();
+    IMUDataWrite();
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
@@ -341,7 +419,7 @@ int main(int argc, char **argv)
     win = initscr();
     clearok(win, TRUE);
 
-    while ((!imuDataJetsonBuffer.QueueIsEmpty() || !cameraFramesBuffer.QueueIsEmpty()) && !stopProgram)
+    while ((!imuDataBuffer.QueueIsEmpty() || !cameraFramesBuffer.QueueIsEmpty()) && !stop)
     {
         if (cv::waitKey(1) == 'q')
         {
@@ -357,7 +435,7 @@ int main(int argc, char **argv)
             auto timePassedMillisecondsImuJetson = std::chrono::duration_cast<std::chrono::milliseconds>(imuDataJetson.timeStamp - tempTimeImu);
 
             wmove(win, 3, 2);
-            snprintf(buff, 511, "Index = %06.2f", imuDataJetson.index);
+            snprintf(buff, 511, "Index = %0i", imuDataJetson.index);
             waddstr(win, buff);
 
             wmove(win, 5, 2);
@@ -397,7 +475,7 @@ int main(int argc, char **argv)
             auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
 
             wmove(win, 3, 2);
-            snprintf(buff, 511, "Index = %06.2f", imuData.index);
+            snprintf(buff, 511, "Index = %0i", imuData.index);
             waddstr(win, buff);
 
             wmove(win, 5, 3);
@@ -424,7 +502,7 @@ int main(int argc, char **argv)
             auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTimeCamera);
 
             wmove(win, 19, 2);
-            snprintf(buff, 511, "Index = %06.2f", frame.index);
+            snprintf(buff, 511, "Index = %0i", frame.index);
             waddstr(win, buff);
 
             wmove(win, 21, 2);
@@ -458,6 +536,8 @@ int main(int argc, char **argv)
 
         wrefresh(win);
         wclear(win);
+
+        stop = stopProgram;
     }
 
     endwin();

@@ -1,1 +1,6 @@
 new_output
+cameraTime
+IMUData
+IMUTime
+*.png
+*.dat
