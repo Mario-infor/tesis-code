@@ -230,6 +230,52 @@ void imuThreadJetson()
     myMutex.unlock();
 }
 
+void IMUDataJetsonWrite()
+{
+    std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
+    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
+    auto tempTimeIMUWrite = std::chrono::steady_clock::now();
+
+    if (IMUTimeFile.is_open() && IMUDataFile.is_open())
+    {
+        while (!imuDataBuffer.QueueIsEmpty())
+        {
+            ImuInput tempIMU;
+            imuDataBuffer.Dequeue(tempIMU);
+
+            if (tempIMU.index != 0)
+            {
+                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempIMU.timeStamp - tempTimeIMUWrite);
+                IMUTimeFile << timePassedMillisecondsCamera.count() << std::endl;
+            }
+            else
+            {
+                IMUTimeFile << 0 << std::endl;
+            }
+
+            IMUDataFile << tempIMU.index << std::endl;
+            IMUDataFile << tempIMU.gyroX << std::endl;
+            IMUDataFile << tempIMU.gyroY << std::endl;
+            IMUDataFile << tempIMU.gyroZ << std::endl;
+            IMUDataFile << tempIMU.eulerX << std::endl;
+            IMUDataFile << tempIMU.eulerY << std::endl;
+            IMUDataFile << tempIMU.eulerZ << std::endl;
+            IMUDataFile << tempIMU.quatX << std::endl;
+            IMUDataFile << tempIMU.quatY << std::endl;
+            IMUDataFile << tempIMU.quatZ << std::endl;
+            IMUDataFile << tempIMU.quatW << std::endl;
+            IMUDataFile << tempIMU.accX << std::endl;
+            IMUDataFile << tempIMU.accY << std::endl;
+            IMUDataFile << tempIMU.accZ << std::endl;
+            IMUDataFile << tempIMU.gravX << std::endl;
+            IMUDataFile << tempIMU.gravY << std::endl;
+            IMUDataFile << tempIMU.gravZ << std::endl;
+
+            tempTimeIMUWrite = tempIMU.timeStamp;
+        }
+    }
+}
+
 #else
 void imuThread()
 {
@@ -312,6 +358,43 @@ void imuThread()
     serial.close();
 }
 
+void IMUDataWrite()
+{
+    std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
+    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
+    auto tempTimeIMUWrite = std::chrono::steady_clock::now();
+
+    if (IMUTimeFile.is_open() && IMUDataFile.is_open())
+    {
+        while (!imuDataBuffer.QueueIsEmpty())
+        {
+            ImuInput tempIMU;
+            imuDataBuffer.Dequeue(tempIMU);
+
+            if (tempIMU.index != 0)
+            {
+                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempIMU.timeStamp - tempTimeIMUWrite);
+                IMUTimeFile << timePassedMillisecondsCamera.count() << std::endl;
+            }
+            else
+            {
+                IMUTimeFile << 0 << std::endl;
+            }
+
+            IMUDataFile << tempIMU.index << std::endl;
+            IMUDataFile << tempIMU.accX << std::endl;
+            IMUDataFile << tempIMU.accY << std::endl;
+            IMUDataFile << tempIMU.accZ << std::endl;
+            IMUDataFile << tempIMU.quatW << std::endl;
+            IMUDataFile << tempIMU.quatX << std::endl;
+            IMUDataFile << tempIMU.quatY << std::endl;
+            IMUDataFile << tempIMU.quatZ << std::endl;
+
+            tempTimeIMUWrite = tempIMU.timeStamp;
+        }
+    }
+}
+
 #endif
 
 void cameraDataWrite()
@@ -343,42 +426,11 @@ void cameraDataWrite()
     }
 }
 
-void IMUDataWrite()
+void printData()
 {
-    std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
-    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
-    auto tempTimeIMUWrite = std::chrono::steady_clock::now();
-
-    if (IMUTimeFile.is_open() && IMUDataFile.is_open())
-    {
-        while (!imuDataBuffer.QueueIsEmpty())
-        {
-            ImuInput tempIMU;
-            imuDataBuffer.Dequeue(tempIMU);
-
-            if (tempIMU.index != 0)
-            {
-                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempIMU.timeStamp - tempTimeIMUWrite);
-                IMUTimeFile << timePassedMillisecondsCamera.count() << std::endl;
-            }
-            else
-            {
-                IMUTimeFile << 0 << std::endl;
-            }
-            
-            IMUDataFile << tempIMU.index << std::endl;
-            IMUDataFile << tempIMU.accX << std::endl;
-            IMUDataFile << tempIMU.accY << std::endl;
-            IMUDataFile << tempIMU.accZ << std::endl;
-            IMUDataFile << tempIMU.quatW << std::endl;
-            IMUDataFile << tempIMU.quatX << std::endl;
-            IMUDataFile << tempIMU.quatY << std::endl;
-            IMUDataFile << tempIMU.quatZ << std::endl;
-
-            tempTimeIMUWrite = tempIMU.timeStamp;
-        }
-    }
+    
 }
+
 
 int main(int argc, char **argv)
 {
