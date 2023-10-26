@@ -8,7 +8,8 @@
 #include <mutex>
 #include "RingBuffer.h"
 
-#define RINGBUFFERLENGTH 100
+#define RINGBUFFERLENGTHCAMERA 100
+#define RINGBUFFERLENGTHIMU 1000
 #define JETSON
 
 #ifdef JETSON
@@ -63,14 +64,11 @@ std::mutex myMutex;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
 
 #ifdef JETSON
-RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTH);
+RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTHIMU);
 #else
-RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
+RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTHIMU);
 #endif
 
-bool capturedNewFrame = false;
-bool capturedNewImuData = false;
-bool imuThreadIsRunning = true;
 bool stopProgram = false;
 bool doneCalibrating;
 
@@ -106,7 +104,7 @@ void cameraCaptureThread()
 
         int index = 0;
 
-        while (!stop)
+        while (!stop && index < RINGBUFFERLENGTHCAMERA)
         {
             myMutex.lock();
             if (doneCalibrating)
@@ -125,7 +123,7 @@ void cameraCaptureThread()
                     capture.index = index;
                     capture.frame = frame.clone();
                     capture.timeStamp = std::chrono::steady_clock::now();
-                    
+
                     cameraFramesBuffer.Queue(capture);
                     capturedNewFrame = true;
                     index++;
@@ -191,7 +189,7 @@ void imuThreadJetson()
 
     int index = 0;
 
-    while (!stop)
+    while (!stop && index < RINGBUFFERLENGTHIMU)
     {
         sensors.readAll();
 
@@ -245,7 +243,7 @@ void imuThread()
         bool stop = stopProgram;
         myMutex.unlock();
 
-        while (!stop)
+        while (!stop && index < RINGBUFFERLENGTHIMU)
         {
             boost::system::error_code ec;
             boost::asio::read_until(serial, buffer, '\n', ec);
@@ -303,10 +301,6 @@ void imuThread()
     }
 
     serial.close();
-
-    myMutex.lock();
-    imuThreadIsRunning = false;
-    myMutex.unlock();
 }
 
 #endif
@@ -347,25 +341,24 @@ int main(int argc, char **argv)
     win = initscr();
     clearok(win, TRUE);
 
-    while (!stop)
+    while ((!imuDataJetsonBuffer.QueueIsEmpty() || !cameraFramesBuffer.QueueIsEmpty()) && !stopProgram)
     {
         if (cv::waitKey(1) == 'q')
         {
             stopProgram = true;
         }
 
-        myMutex.lock();
-        stop = stopProgram;
-        myMutex.unlock();
-
-        myMutex.lock();
-        if (capturedNewImuData)
-        {
 #ifdef JETSON
+        if (!imuDataJetsonBuffer.QueueIsEmpty())
+        {
             ImuInputJetson imuDataJetson;
             imuDataJetsonBuffer.Dequeue(imuDataJetson);
 
             auto timePassedMillisecondsImuJetson = std::chrono::duration_cast<std::chrono::milliseconds>(imuDataJetson.timeStamp - tempTimeImu);
+
+            wmove(win, 3, 2);
+            snprintf(buff, 511, "Index = %06.2f", imuDataJetson.index);
+            waddstr(win, buff);
 
             wmove(win, 5, 2);
             snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
@@ -393,12 +386,19 @@ int main(int argc, char **argv)
             waddstr(win, buff);
 
             tempTimeImu = imuDataJetson.timeStamp;
+        }
 
 #else
+        if (!imuDataBuffer.QueueIsEmpty())
+        {
             ImuInput imuData;
             imuDataBuffer.Dequeue(imuData);
 
             auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
+
+            wmove(win, 3, 2);
+            snprintf(buff, 511, "Index = %06.2f", imuData.index);
+            waddstr(win, buff);
 
             wmove(win, 5, 3);
             snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
@@ -413,13 +413,10 @@ int main(int argc, char **argv)
             waddstr(win, buff);
 
             tempTimeImu = imuData.timeStamp;
-#endif
-            capturedNewImuData = false;
         }
-        myMutex.unlock();
 
-        myMutex.lock();
-        if (capturedNewFrame)
+#endif
+        if (!cameraFramesBuffer.QueueIsEmpty())
         {
             CameraInput frame;
             cameraFramesBuffer.Dequeue(frame);
@@ -427,6 +424,10 @@ int main(int argc, char **argv)
             auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTimeCamera);
 
             wmove(win, 19, 2);
+            snprintf(buff, 511, "Index = %06.2f", frame.index);
+            waddstr(win, buff);
+
+            wmove(win, 21, 2);
             snprintf(buff, 511, "Time between captures (Camera): %010ld", timePassedMillisecondsCamera.count());
             waddstr(win, buff);
 
@@ -448,14 +449,13 @@ int main(int argc, char **argv)
                 }
             }
 
-            // cv::imshow("draw axis", frame.frame);
+            cv::imshow("draw axis", frame.frame);
 
             tempTimeCamera = frame.timeStamp;
-            capturedNewFrame = false;
-
-            cv::waitKey(33);
         }
-        myMutex.unlock();
+
+        cv::waitKey(33);
+
         wrefresh(win);
         wclear(win);
     }
