@@ -9,21 +9,24 @@
 #include "RingBuffer.h"
 
 #define RINGBUFFERLENGTH 100
+#define JETSON
 
 #ifdef JETSON
-    #include <BNO055-BBB_driver.h>
+#include <BNO055-BBB_driver.h>
 #else
-    #include <boost/asio.hpp>
+#include <boost/asio.hpp>
 #endif
 
 struct CameraInput
 {
+    int index;
     cv::Mat frame;
     std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
 struct ImuInput
 {
+    int index;
     float accX;
     float accY;
     float accZ;
@@ -36,6 +39,7 @@ struct ImuInput
 
 struct ImuInputJetson
 {
+    int index;
     float gyroX;
     float gyroY;
     float gyroZ;
@@ -59,16 +63,16 @@ std::mutex myMutex;
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTH);
 
 #ifdef JETSON
-    RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTH);
+RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTH);
 #else
-    RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
+RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTH);
 #endif
 
 bool capturedNewFrame = false;
 bool capturedNewImuData = false;
 bool imuThreadIsRunning = true;
 bool stopProgram = false;
-
+bool doneCalibrating;
 
 #ifdef JETSON
 std::string get_tegra_pipeline(int width, int height, int fps)
@@ -100,26 +104,35 @@ void cameraCaptureThread()
         bool stop = stopProgram;
         myMutex.unlock();
 
+        int index = 0;
+
         while (!stop)
         {
-            cv::Mat frame;
-            cap.read(frame);
-
-            if (frame.empty())
-            {
-                std::cerr << "No se pudo capturar el frame." << std::endl;
-                break;
-            }
-            else
-            {
-                CameraInput capture;
-                capture.frame = frame.clone();
-                capture.timeStamp = std::chrono::steady_clock::now();
-                cameraFramesBuffer.Queue(capture);
-                capturedNewFrame = true;
-            }
             myMutex.lock();
-            stop = stopProgram;
+            if (doneCalibrating)
+            {
+                cv::Mat frame;
+                cap.read(frame);
+
+                if (frame.empty())
+                {
+                    std::cerr << "No se pudo capturar el frame." << std::endl;
+                    break;
+                }
+                else
+                {
+                    CameraInput capture;
+                    capture.index = index;
+                    capture.frame = frame.clone();
+                    capture.timeStamp = std::chrono::steady_clock::now();
+                    
+                    cameraFramesBuffer.Queue(capture);
+                    capturedNewFrame = true;
+                    index++;
+                }
+
+                stop = stopProgram;
+            }
             myMutex.unlock();
         }
     }
@@ -159,26 +172,31 @@ void parseImuData(std::string data, std::vector<float> &parsedData)
 void imuThreadJetson()
 {
     int cont = 0;
-    bool flag;
     char filename[] = "/dev/i2c-1";
     BNO055 sensors;
     sensors.openDevice(filename);
 
+    myMutex.lock();
     do
     {
         sensors.readCalibVals();
-        flag = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
-    } while (cont++ < 2000 && !flag);
+        doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
+    } while (cont++ < 2000 && !doneCalibrating);
+    doneCalibrating = true;
+    myMutex.unlock();
 
     myMutex.lock();
     bool stop = stopProgram;
     myMutex.unlock();
+
+    int index = 0;
 
     while (!stop)
     {
         sensors.readAll();
 
         ImuInputJetson imuInputJetson;
+        imuInputJetson.index = index;
         imuInputJetson.timeStamp = std::chrono::steady_clock::now();
 
         imuInputJetson.gyroX = sensors.gyroVect.vi[0] * 0.01;
@@ -203,6 +221,8 @@ void imuThreadJetson()
         capturedNewImuData = true;
         stop = stopProgram;
         myMutex.unlock();
+
+        index++;
     }
     myMutex.lock();
     stop = stopProgram;
@@ -295,12 +315,14 @@ int main(int argc, char **argv)
 {
     std::thread cameraCapture(cameraCaptureThread);
 
-    #ifdef JETSON
-        std::thread imu(imuThreadJetson);
-    #else
-        std::thread imu(imuThread);
-    #endif
-    
+#ifdef JETSON
+    std::thread imu(imuThreadJetson);
+#else
+    std::thread imu(imuThread);
+#endif
+
+    cameraCapture.join();
+    imu.join();
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
@@ -315,14 +337,13 @@ int main(int argc, char **argv)
     WINDOW *win;
     char buff[512];
 
-    
     myMutex.lock();
     bool stop = stopProgram;
     myMutex.unlock();
 
     auto tempTimeImu = std::chrono::steady_clock::now();
     auto tempTimeCamera = std::chrono::steady_clock::now();
-    
+
     win = initscr();
     clearok(win, TRUE);
 
@@ -340,59 +361,59 @@ int main(int argc, char **argv)
         myMutex.lock();
         if (capturedNewImuData)
         {
-            #ifdef JETSON
-                ImuInputJetson imuDataJetson;
-                imuDataJetsonBuffer.Dequeue(imuDataJetson);
+#ifdef JETSON
+            ImuInputJetson imuDataJetson;
+            imuDataJetsonBuffer.Dequeue(imuDataJetson);
 
-                auto timePassedMillisecondsImuJetson = std::chrono::duration_cast<std::chrono::milliseconds>(imuDataJetson.timeStamp - tempTimeImu);
+            auto timePassedMillisecondsImuJetson = std::chrono::duration_cast<std::chrono::milliseconds>(imuDataJetson.timeStamp - tempTimeImu);
 
-                wmove(win, 5, 2);
-                snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
-                waddstr(win, buff);
+            wmove(win, 5, 2);
+            snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
+            waddstr(win, buff);
 
-                wmove(win, 7, 2);
-                snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerX, imuDataJetson.eulerY, imuDataJetson.eulerZ);
-                waddstr(win, buff);
+            wmove(win, 7, 2);
+            snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerX, imuDataJetson.eulerY, imuDataJetson.eulerZ);
+            waddstr(win, buff);
 
-                wmove(win, 9, 2);
-                snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuDataJetson.quatX, 
-                            imuDataJetson.quatY, imuDataJetson.quatZ, imuDataJetson.quatW);
-                waddstr(win, buff);
+            wmove(win, 9, 2);
+            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuDataJetson.quatX,
+                     imuDataJetson.quatY, imuDataJetson.quatZ, imuDataJetson.quatW);
+            waddstr(win, buff);
 
-                wmove(win, 11, 3);
-                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accX, imuDataJetson.accY, imuDataJetson.accZ);
-                waddstr(win, buff);
+            wmove(win, 11, 3);
+            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accX, imuDataJetson.accY, imuDataJetson.accZ);
+            waddstr(win, buff);
 
-                wmove(win, 13, 2);
-                snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
-                waddstr(win, buff);      
+            wmove(win, 13, 2);
+            snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
+            waddstr(win, buff);
 
-                wmove(win, 15, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImuJetson.count());
-                waddstr(win, buff);
+            wmove(win, 15, 2);
+            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImuJetson.count());
+            waddstr(win, buff);
 
-                tempTimeImu = imuDataJetson.timeStamp;
+            tempTimeImu = imuDataJetson.timeStamp;
 
-            #else
-                ImuInput imuData;
-                imuDataBuffer.Dequeue(imuData);
+#else
+            ImuInput imuData;
+            imuDataBuffer.Dequeue(imuData);
 
-                auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
+            auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
 
-                wmove(win, 5, 3);
-                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
-                waddstr(win, buff);
+            wmove(win, 5, 3);
+            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
+            waddstr(win, buff);
 
-                wmove(win, 7, 2);
-                snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
-                waddstr(win, buff);
+            wmove(win, 7, 2);
+            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
+            waddstr(win, buff);
 
-                wmove(win, 9, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImu.count());
-                waddstr(win, buff);
+            wmove(win, 9, 2);
+            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImu.count());
+            waddstr(win, buff);
 
-                tempTimeImu = imuData.timeStamp;
-            #endif
+            tempTimeImu = imuData.timeStamp;
+#endif
             capturedNewImuData = false;
         }
         myMutex.unlock();
@@ -427,7 +448,7 @@ int main(int argc, char **argv)
                 }
             }
 
-            //cv::imshow("draw axis", frame.frame);
+            // cv::imshow("draw axis", frame.frame);
 
             tempTimeCamera = frame.timeStamp;
             capturedNewFrame = false;
@@ -436,11 +457,8 @@ int main(int argc, char **argv)
         }
         myMutex.unlock();
         wrefresh(win);
-	wclear(win);
+        wclear(win);
     }
-
-    cameraCapture.join();
-    imu.join();
 
     endwin();
 
