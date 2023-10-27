@@ -22,13 +22,14 @@
 struct CameraInput
 {
     int index;
+    int time;
     cv::Mat frame;
-    std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
 struct ImuInput
 {
     int index;
+    int time;
     float accX;
     float accY;
     float accZ;
@@ -36,12 +37,13 @@ struct ImuInput
     float quatY;
     float quatZ;
     float quatW;
-    std::chrono::time_point<std::chrono::steady_clock> timeStamp;
+    
 };
 
 struct ImuInputJetson
 {
     int index;
+    int time;
     float gyroX;
     float gyroY;
     float gyroZ;
@@ -58,7 +60,6 @@ struct ImuInputJetson
     float gravX;
     float gravY;
     float gravZ;
-    std::chrono::time_point<std::chrono::steady_clock> timeStamp;
 };
 
 std::mutex myMutex;
@@ -70,6 +71,8 @@ RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RING
 RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTHIMU);
 #endif
 
+std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
+std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 std::string dirCameraFolder = "./Data/Camera/";
 std::string dirIMUFolder = "./Data/IMU/";
 bool stopProgram = false;
@@ -126,7 +129,7 @@ void cameraCaptureThread()
                     CameraInput capture;
                     capture.index = index;
                     capture.frame = frame.clone();
-                    capture.timeStamp = std::chrono::steady_clock::now();
+                    capture.time = std::chrono::duration_cast<std::chrono::milliseconds>(timeCameraStart - std::chrono::steady_clock::now()).count();
 
                     cameraFramesBuffer.Queue(capture);
                     index++;
@@ -198,7 +201,7 @@ void imuThreadJetson()
 
         ImuInputJetson imuInputJetson;
         imuInputJetson.index = index;
-        imuInputJetson.timeStamp = std::chrono::steady_clock::now();
+        imuInputJetson.time = std::chrono::duration_cast<std::chrono::milliseconds>(timeIMUStart - std::chrono::steady_clock::now()).count();
 
         imuInputJetson.gyroX = sensors.gyroVect.vi[0] * 0.01;
         imuInputJetson.gyroY = sensors.gyroVect.vi[1] * 0.01;
@@ -301,7 +304,7 @@ void imuThread()
             boost::asio::read_until(serial, buffer, '\n', ec);
 
             ImuInput imuInput;
-            imuInput.timeStamp = std::chrono::steady_clock::now();
+            imuInput.time = std::chrono::duration_cast<std::chrono::milliseconds>(timeIMUStart - std::chrono::steady_clock::now()).count();
 
             if (ec)
             {
@@ -373,8 +376,7 @@ void IMUDataWrite()
 
             if (tempIMU.index != 0)
             {
-                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempIMU.timeStamp - tempTimeIMUWrite);
-                IMUTimeFile << timePassedMillisecondsCamera.count() << std::endl;
+                IMUTimeFile << tempIMU.time << std::endl;
             }
             else
             {
@@ -389,8 +391,6 @@ void IMUDataWrite()
             IMUDataFile << tempIMU.quatX << std::endl;
             IMUDataFile << tempIMU.quatY << std::endl;
             IMUDataFile << tempIMU.quatZ << std::endl;
-
-            tempTimeIMUWrite = tempIMU.timeStamp;
         }
     }
 }
@@ -400,7 +400,6 @@ void IMUDataWrite()
 void cameraDataWrite()
 {
     std::ofstream cameraTimeFile(dirCameraFolder + "cameraTime", std::ios::out);
-    auto tempTimeCameraWrite = std::chrono::steady_clock::now();
 
     if (cameraTimeFile.is_open())
     {
@@ -413,27 +412,41 @@ void cameraDataWrite()
 
             if (tempFrame.index != 0)
             {
-                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempFrame.timeStamp - tempTimeCameraWrite);
-                cameraTimeFile << timePassedMillisecondsCamera.count() << std::endl;
+                cameraTimeFile << tempFrame.time << std::endl;
             }
             else
             {
                 cameraTimeFile << 0 << std::endl;
             }
-
-            tempTimeCameraWrite = tempFrame.timeStamp;
         }
     }
 }
-
-void printData()
+/*
+std::vector<CameraInput> readDataCamera(std::string path)
 {
-    
+    std::vector<CameraInput> cameraTimeData;
+    std::ifstream file(path);
+
+    CameraInput tempCameraInput;
+
+    if (!file)
+        std::cerr << "File not found." << std::endl;
+    else
+    {
+        int value;
+        while (file >> value)
+            tempCameraInput.
+            data.push_back(value);
+    }
+
+    return cameraData;
 }
-
-
+*/
 int main(int argc, char **argv)
 {
+    timeCameraStart = std::chrono::steady_clock::now();
+    timeIMUStart = std::chrono::steady_clock::now();
+
     std::thread cameraCapture(cameraCaptureThread);
 
 #ifdef JETSON
@@ -524,8 +537,6 @@ int main(int argc, char **argv)
             ImuInput imuData;
             imuDataBuffer.Dequeue(imuData);
 
-            auto timePassedMillisecondsImu = std::chrono::duration_cast<std::chrono::milliseconds>(imuData.timeStamp - tempTimeImu);
-
             wmove(win, 3, 2);
             snprintf(buff, 511, "Index = %0i", imuData.index);
             waddstr(win, buff);
@@ -539,10 +550,9 @@ int main(int argc, char **argv)
             waddstr(win, buff);
 
             wmove(win, 9, 2);
-            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImu.count());
+            snprintf(buff, 511, "Time between captures (IMU): %010ld", imuData.time);
             waddstr(win, buff);
-
-            tempTimeImu = imuData.timeStamp;
+            
         }
 
 #endif
@@ -551,14 +561,12 @@ int main(int argc, char **argv)
             CameraInput frame;
             cameraFramesBuffer.Dequeue(frame);
 
-            auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(frame.timeStamp - tempTimeCamera);
-
             wmove(win, 19, 2);
             snprintf(buff, 511, "Index = %0i", frame.index);
             waddstr(win, buff);
 
             wmove(win, 21, 2);
-            snprintf(buff, 511, "Time between captures (Camera): %010ld", timePassedMillisecondsCamera.count());
+            snprintf(buff, 511, "Time between captures (Camera): %010ld", frame.time);
             waddstr(win, buff);
 
             std::vector<int> markerIds;
@@ -580,8 +588,6 @@ int main(int argc, char **argv)
             }
 
             cv::imshow("draw axis", frame.frame);
-
-            tempTimeCamera = frame.timeStamp;
         }
 
         cv::waitKey(33);
