@@ -109,6 +109,7 @@ void cameraCaptureThread()
         myMutex.unlock();
 
         int index = 0;
+        timeCameraStart = std::chrono::steady_clock::now();
 
         while (!stop && index < RINGBUFFERLENGTHCAMERA)
         {
@@ -116,6 +117,7 @@ void cameraCaptureThread()
             myMutex.lock();
             if (doneCalibrating)
             {
+                
                 cv::Mat frame;
                 cap.read(frame);
 
@@ -129,7 +131,7 @@ void cameraCaptureThread()
                     CameraInput capture;
                     capture.index = index;
                     capture.frame = frame.clone();
-                    capture.time = std::chrono::duration_cast<std::chrono::milliseconds>(timeCameraStart - std::chrono::steady_clock::now()).count();
+                    capture.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count();
 
                     cameraFramesBuffer.Queue(capture);
                     index++;
@@ -201,7 +203,7 @@ void imuThreadJetson()
 
         ImuInputJetson imuInputJetson;
         imuInputJetson.index = index;
-        imuInputJetson.time = std::chrono::duration_cast<std::chrono::milliseconds>(timeIMUStart - std::chrono::steady_clock::now()).count();
+        imuInputJetson.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count();
 
         imuInputJetson.gyroX = sensors.gyroVect.vi[0] * 0.01;
         imuInputJetson.gyroY = sensors.gyroVect.vi[1] * 0.01;
@@ -244,9 +246,9 @@ void IMUDataJetsonWrite()
             ImuInput tempIMU;
             imuDataBuffer.Dequeue(tempIMU);
 
-            IMUDataFile << tempIMU.index << std::endl;
             IMUTimeFile << tempIMU.time << std::endl;
-            
+
+            IMUDataFile << tempIMU.index << std::endl;
             IMUDataFile << tempIMU.gyroX << std::endl;
             IMUDataFile << tempIMU.gyroY << std::endl;
             IMUDataFile << tempIMU.gyroZ << std::endl;
@@ -263,10 +265,50 @@ void IMUDataJetsonWrite()
             IMUDataFile << tempIMU.gravX << std::endl;
             IMUDataFile << tempIMU.gravY << std::endl;
             IMUDataFile << tempIMU.gravZ << std::endl;
-
-            tempTimeIMUWrite = tempIMU.timeStamp;
         }
     }
+}
+
+std::vector<ImuInput> readDataIMUJetson()
+{
+    std::vector<ImuInput> IMUData;
+    std::ifstream fileTime(dirIMUFolder + "IMUTime");
+    std::ifstream fileData(dirIMUFolder + "IMUData");
+    
+    if (!fileTime || !fileData)
+        std::cerr << "Files not found." << std::endl;
+    else
+    {
+        int value;
+        while (fileTime >> value)
+        {
+            ImuInput tempIMUInput;
+
+            tempIMUInput.time = value;
+
+            fileData >> tempIMUInput.index;
+            fileData >> tempIMUInput.gyroX;
+            fileData >> tempIMUInput.gyroY;
+            fileData >> tempIMUInput.gyroZ;
+            fileData >> tempIMUInput.eulerX;
+            fileData >> tempIMUInput.eulerY;
+            fileData >> tempIMUInput.eulerZ;
+            fileData >> tempIMUInput.quatX;
+            fileData >> tempIMUInput.quatY;
+            fileData >> tempIMUInput.quatZ;
+            fileData >> tempIMUInput.quatW;
+            fileData >> tempIMUInput.accX;
+            fileData >> tempIMUInput.accY;
+            fileData >> tempIMUInput.accZ;
+            fileData >> tempIMUInput.gravX;
+            fileData >> tempIMUInput.gravY;
+            fileData >> tempIMUInput.gravZ;
+
+            IMUData.push_back(tempIMUInput);
+        }            
+    }
+
+    return IMUData;
 }
 
 #else
@@ -294,7 +336,7 @@ void imuThread()
             boost::asio::read_until(serial, buffer, '\n', ec);
 
             ImuInput imuInput;
-            imuInput.time = std::chrono::duration_cast<std::chrono::milliseconds>(timeIMUStart - std::chrono::steady_clock::now()).count();
+            imuInput.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count();
 
             if (ec)
             {
@@ -363,15 +405,7 @@ void IMUDataWrite()
             ImuInput tempIMU;
             imuDataBuffer.Dequeue(tempIMU);
 
-            if (tempIMU.index != 0)
-            {
-                IMUTimeFile << tempIMU.time << std::endl;
-            }
-            else
-            {
-                IMUTimeFile << 0 << std::endl;
-            }
-
+            IMUTimeFile << tempIMU.time << std::endl;
             IMUDataFile << tempIMU.index << std::endl;
             IMUDataFile << tempIMU.accX << std::endl;
             IMUDataFile << tempIMU.accY << std::endl;
@@ -382,6 +416,38 @@ void IMUDataWrite()
             IMUDataFile << tempIMU.quatZ << std::endl;
         }
     }
+}
+
+std::vector<ImuInput> readDataIMU()
+{
+    std::vector<ImuInput> IMUData;
+    std::ifstream fileTime(dirIMUFolder + "IMUTime");
+    std::ifstream fileData(dirIMUFolder + "IMUData");
+    
+    if (!fileTime || !fileData)
+        std::cerr << "Files not found." << std::endl;
+    else
+    {
+        int value;
+        while (fileTime >> value)
+        {
+            ImuInput tempIMUInput;
+
+            tempIMUInput.time = value;
+            fileData >> tempIMUInput.index;
+            fileData >> tempIMUInput.accX;
+            fileData >> tempIMUInput.accY;
+            fileData >> tempIMUInput.accZ;
+            fileData >> tempIMUInput.quatW;
+            fileData >> tempIMUInput.quatX;
+            fileData >> tempIMUInput.quatY;
+            fileData >> tempIMUInput.quatZ;
+
+            IMUData.push_back(tempIMUInput);
+        }            
+    }
+
+    return IMUData;
 }
 
 #endif
@@ -399,14 +465,7 @@ void cameraDataWrite()
             std::string imageName = "frame_" + std::to_string(tempFrame.index) + ".png";
             cv::imwrite(dirCameraFolder + imageName, tempFrame.frame);
 
-            if (tempFrame.index != 0)
-            {
-                cameraTimeFile << tempFrame.time << std::endl;
-            }
-            else
-            {
-                cameraTimeFile << 0 << std::endl;
-            }
+            cameraTimeFile << tempFrame.time << std::endl;
         }
     }
 }
@@ -431,40 +490,11 @@ std::vector<CameraInput> readDataCamera(std::string path)
     return cameraData;
 }*/
 
-std::vector<ImuInput> readDataIMU()
-{
-    std::vector<ImuInput> IMUData;
-    std::ifstream fileTime(dirIMUFolder + "IMUTime");
-    std::ifstream fileData(dirIMUFolder + "IMUData");
 
-    ImuInput tempIMUInput;
-
-    if (!fileTime || !fileData)
-        std::cerr << "Files not found." << std::endl;
-    else
-    {
-        int value;
-        while (fileTime >> value)
-
-            tempIMUInput.time = value;
-            fileData >> tempIMUInput.index;
-            fileData >> tempIMUInput.accX;
-            fileData >> tempIMUInput.accY;
-            fileData >> tempIMUInput.accZ;
-            fileData >> tempIMUInput.quatW;
-            fileData >> tempIMUInput.quatX;
-            fileData >> tempIMUInput.quatY;
-            fileData >> tempIMUInput.quatZ;
-
-            IMUData.push_back(tempIMUInput);
-    }
-
-    return IMUData;
-}
 
 int main(int argc, char **argv)
 {
-    timeCameraStart = std::chrono::steady_clock::now();
+    
     timeIMUStart = std::chrono::steady_clock::now();
 
     std::thread cameraCapture(cameraCaptureThread);
@@ -480,6 +510,8 @@ int main(int argc, char **argv)
 
     cameraDataWrite();
     IMUDataWrite();
+
+    std::vector<ImuInput> imuRead = readDataIMU();
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
