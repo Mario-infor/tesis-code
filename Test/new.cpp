@@ -12,6 +12,7 @@
 
 #define RINGBUFFERLENGTHCAMERA 50
 #define RINGBUFFERLENGTHIMU 100
+//#define JETSON
 
 #ifdef JETSON
 #include <BNO055-BBB_driver.h>
@@ -37,7 +38,6 @@ struct ImuInput
     float quatY;
     float quatZ;
     float quatW;
-    
 };
 
 struct ImuInputJetson
@@ -222,7 +222,6 @@ void imuThreadJetson()
 
         imuDataJetsonBuffer.Queue(imuInputJetson);
         myMutex.lock();
-        capturedNewImuData = true;
         stop = stopProgram;
         myMutex.unlock();
 
@@ -237,7 +236,6 @@ void IMUDataJetsonWrite()
 {
     std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
     std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
-    auto tempTimeIMUWrite = std::chrono::steady_clock::now();
 
     if (IMUTimeFile.is_open() && IMUDataFile.is_open())
     {
@@ -246,17 +244,9 @@ void IMUDataJetsonWrite()
             ImuInput tempIMU;
             imuDataBuffer.Dequeue(tempIMU);
 
-            if (tempIMU.index != 0)
-            {
-                auto timePassedMillisecondsCamera = std::chrono::duration_cast<std::chrono::milliseconds>(tempIMU.timeStamp - tempTimeIMUWrite);
-                IMUTimeFile << timePassedMillisecondsCamera.count() << std::endl;
-            }
-            else
-            {
-                IMUTimeFile << 0 << std::endl;
-            }
-
             IMUDataFile << tempIMU.index << std::endl;
+            IMUTimeFile << tempIMU.time << std::endl;
+            
             IMUDataFile << tempIMU.gyroX << std::endl;
             IMUDataFile << tempIMU.gyroY << std::endl;
             IMUDataFile << tempIMU.gyroZ << std::endl;
@@ -365,7 +355,6 @@ void IMUDataWrite()
 {
     std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
     std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
-    auto tempTimeIMUWrite = std::chrono::steady_clock::now();
 
     if (IMUTimeFile.is_open() && IMUDataFile.is_open())
     {
@@ -424,7 +413,7 @@ void cameraDataWrite()
 /*
 std::vector<CameraInput> readDataCamera(std::string path)
 {
-    std::vector<CameraInput> cameraTimeData;
+    std::vector<CameraInput> cameraData;
     std::ifstream file(path);
 
     CameraInput tempCameraInput;
@@ -440,8 +429,39 @@ std::vector<CameraInput> readDataCamera(std::string path)
     }
 
     return cameraData;
+}*/
+
+std::vector<ImuInput> readDataIMU()
+{
+    std::vector<ImuInput> IMUData;
+    std::ifstream fileTime(dirIMUFolder + "IMUTime");
+    std::ifstream fileData(dirIMUFolder + "IMUData");
+
+    ImuInput tempIMUInput;
+
+    if (!fileTime || !fileData)
+        std::cerr << "Files not found." << std::endl;
+    else
+    {
+        int value;
+        while (fileTime >> value)
+
+            tempIMUInput.time = value;
+            fileData >> tempIMUInput.index;
+            fileData >> tempIMUInput.accX;
+            fileData >> tempIMUInput.accY;
+            fileData >> tempIMUInput.accZ;
+            fileData >> tempIMUInput.quatW;
+            fileData >> tempIMUInput.quatX;
+            fileData >> tempIMUInput.quatY;
+            fileData >> tempIMUInput.quatZ;
+
+            IMUData.push_back(tempIMUInput);
+    }
+
+    return IMUData;
 }
-*/
+
 int main(int argc, char **argv)
 {
     timeCameraStart = std::chrono::steady_clock::now();
@@ -477,9 +497,6 @@ int main(int argc, char **argv)
     myMutex.lock();
     bool stop = stopProgram;
     myMutex.unlock();
-
-    auto tempTimeImu = std::chrono::steady_clock::now();
-    auto tempTimeCamera = std::chrono::steady_clock::now();
 
     win = initscr();
     clearok(win, TRUE);
@@ -552,7 +569,6 @@ int main(int argc, char **argv)
             wmove(win, 9, 2);
             snprintf(buff, 511, "Time between captures (IMU): %010ld", imuData.time);
             waddstr(win, buff);
-            
         }
 
 #endif
