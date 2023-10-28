@@ -1,8 +1,12 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <chrono>
+#ifdef JETSON
+#include <BNO055-BBB_driver.h>
+#else
 #include <boost/asio.hpp>
+#endif
+#include <chrono>
 #include <curses.h>
 #include <vector>
 #include <thread>
@@ -10,16 +14,12 @@
 #include <fstream>
 #include "RingBuffer.h"
 
-#define RINGBUFFERLENGTHCAMERA 50
-#define RINGBUFFERLENGTHIMU 100
-//#define JETSON
+// Amount of IMU data and frames to read from devices.
+#define RINGBUFFERLENGTHCAMERA 100
+#define RINGBUFFERLENGTHIMU 200
+// #define JETSON
 
-#ifdef JETSON
-#include <BNO055-BBB_driver.h>
-#else
-// #include <boost/asio.hpp>
-#endif
-
+// Struct to store information about each frame saved.
 struct CameraInput
 {
     int index;
@@ -27,6 +27,7 @@ struct CameraInput
     cv::Mat frame;
 };
 
+// Struct to store information about each IMU data saved.
 struct ImuInput
 {
     int index;
@@ -40,6 +41,8 @@ struct ImuInput
     float quatW;
 };
 
+
+// 
 struct ImuInputJetson
 {
     int index;
@@ -117,7 +120,7 @@ void cameraCaptureThread()
             myMutex.lock();
             if (doneCalibrating)
             {
-                
+
                 cv::Mat frame;
                 cap.read(frame);
 
@@ -274,7 +277,7 @@ std::vector<ImuInput> readDataIMUJetson()
     std::vector<ImuInput> IMUData;
     std::ifstream fileTime(dirIMUFolder + "IMUTime");
     std::ifstream fileData(dirIMUFolder + "IMUData");
-    
+
     if (!fileTime || !fileData)
         std::cerr << "Files not found." << std::endl;
     else
@@ -305,7 +308,7 @@ std::vector<ImuInput> readDataIMUJetson()
             fileData >> tempIMUInput.gravZ;
 
             IMUData.push_back(tempIMUInput);
-        }            
+        }
     }
 
     return IMUData;
@@ -423,7 +426,7 @@ std::vector<ImuInput> readDataIMU()
     std::vector<ImuInput> IMUData;
     std::ifstream fileTime(dirIMUFolder + "IMUTime");
     std::ifstream fileData(dirIMUFolder + "IMUData");
-    
+
     if (!fileTime || !fileData)
         std::cerr << "Files not found." << std::endl;
     else
@@ -444,7 +447,7 @@ std::vector<ImuInput> readDataIMU()
             fileData >> tempIMUInput.quatZ;
 
             IMUData.push_back(tempIMUInput);
-        }            
+        }
     }
 
     return IMUData;
@@ -469,32 +472,42 @@ void cameraDataWrite()
         }
     }
 }
-/*
-std::vector<CameraInput> readDataCamera(std::string path)
+
+std::vector<CameraInput> readDataCamera()
 {
     std::vector<CameraInput> cameraData;
-    std::ifstream file(path);
+    std::ifstream fileTime(dirCameraFolder + "cameraTime");
 
-    CameraInput tempCameraInput;
+    int index = 0;
+    std::string imageName = "";
+    cv::Mat image;
 
-    if (!file)
+    if (!fileTime)
         std::cerr << "File not found." << std::endl;
     else
     {
         int value;
-        while (file >> value)
-            tempCameraInput.
-            data.push_back(value);
+        while (fileTime >> value)
+        {
+            CameraInput tempCameraInput;
+            tempCameraInput.time = value;
+            tempCameraInput.index = index;
+
+            imageName = "frame_" + std::to_string(index) + ".png";
+            image = cv::imread(dirCameraFolder + imageName);
+            image.copyTo(tempCameraInput.frame);
+
+            cameraData.push_back(tempCameraInput);
+            index++;
+        }
     }
 
     return cameraData;
-}*/
-
-
+}
 
 int main(int argc, char **argv)
 {
-    
+
     timeIMUStart = std::chrono::steady_clock::now();
 
     std::thread cameraCapture(cameraCaptureThread);
@@ -511,7 +524,8 @@ int main(int argc, char **argv)
     cameraDataWrite();
     IMUDataWrite();
 
-    std::vector<ImuInput> imuRead = readDataIMU();
+    std::vector<ImuInput> imuReadVector = readDataIMU();
+    std::vector<CameraInput> cameraReadVector = readDataCamera();
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
@@ -533,7 +547,13 @@ int main(int argc, char **argv)
     win = initscr();
     clearok(win, TRUE);
 
-    while ((!imuDataBuffer.QueueIsEmpty() || !cameraFramesBuffer.QueueIsEmpty()) && !stop)
+    size_t imuIndex = 0;
+    size_t cameraIndex = 0;
+
+    int oldTimeIMU = 0;
+    int oldTimeCamera = 0;
+
+    while ((imuIndex < imuReadVector.size() || cameraIndex < cameraReadVector.size()) && !stop)
     {
         if (cv::waitKey(1) == 'q')
         {
@@ -541,12 +561,9 @@ int main(int argc, char **argv)
         }
 
 #ifdef JETSON
-        if (!imuDataJetsonBuffer.QueueIsEmpty())
+        if (imuIndex < imuReadVector.size())
         {
-            ImuInputJetson imuDataJetson;
-            imuDataJetsonBuffer.Dequeue(imuDataJetson);
-
-            auto timePassedMillisecondsImuJetson = std::chrono::duration_cast<std::chrono::milliseconds>(imuDataJetson.timeStamp - tempTimeImu);
+            ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
 
             wmove(win, 3, 2);
             snprintf(buff, 511, "Index = %0i", imuDataJetson.index);
@@ -573,18 +590,26 @@ int main(int argc, char **argv)
             snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
             waddstr(win, buff);
 
-            wmove(win, 15, 2);
-            snprintf(buff, 511, "Time between captures (IMU): %010ld", timePassedMillisecondsImuJetson.count());
-            waddstr(win, buff);
+            if (imuIndex != 0)
+            {
+                wmove(win, 15, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", imuDataJetson.time - oldTimeIMU);
+                waddstr(win, buff);
 
-            tempTimeImu = imuDataJetson.timeStamp;
+                oldTimeIMU = imuDataJetson.time;
+            }
+            else
+            {
+                wmove(win, 15, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", 0);
+                waddstr(win, buff);
+            }
         }
 
 #else
-        if (!imuDataBuffer.QueueIsEmpty())
+        if (imuIndex < imuReadVector.size())
         {
-            ImuInput imuData;
-            imuDataBuffer.Dequeue(imuData);
+            ImuInput imuData = imuReadVector.at(imuIndex);
 
             wmove(win, 3, 2);
             snprintf(buff, 511, "Index = %0i", imuData.index);
@@ -598,24 +623,45 @@ int main(int argc, char **argv)
             snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
             waddstr(win, buff);
 
-            wmove(win, 9, 2);
-            snprintf(buff, 511, "Time between captures (IMU): %010ld", imuData.time);
-            waddstr(win, buff);
+            if (imuIndex != 0)
+            {
+                wmove(win, 9, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", imuData.time - oldTimeIMU);
+                waddstr(win, buff);
+
+                oldTimeIMU = imuData.time;
+            }
+            else
+            {
+                wmove(win, 9, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", 0);
+                waddstr(win, buff);
+            }
         }
 
 #endif
-        if (!cameraFramesBuffer.QueueIsEmpty())
+        if (cameraIndex < cameraReadVector.size())
         {
-            CameraInput frame;
-            cameraFramesBuffer.Dequeue(frame);
+            CameraInput frame = cameraReadVector.at(cameraIndex);
 
             wmove(win, 19, 2);
             snprintf(buff, 511, "Index = %0i", frame.index);
             waddstr(win, buff);
 
-            wmove(win, 21, 2);
-            snprintf(buff, 511, "Time between captures (Camera): %010ld", frame.time);
-            waddstr(win, buff);
+            if (cameraIndex != 0)
+            {
+                wmove(win, 21, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", frame.time - oldTimeCamera);
+                waddstr(win, buff);
+
+                oldTimeCamera = frame.time;
+            }
+            else
+            {
+                wmove(win, 21, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010ld", 0);
+                waddstr(win, buff);
+            }
 
             std::vector<int> markerIds;
             std::vector<std::vector<cv::Point2f>> markerCorners;
@@ -643,6 +689,8 @@ int main(int argc, char **argv)
         wrefresh(win);
         wclear(win);
 
+        imuIndex++;
+        cameraIndex++;
         stop = stopProgram;
     }
 
