@@ -27,7 +27,7 @@ struct CameraInput
     cv::Mat frame;
 };
 
-// Struct to store information about each IMU data saved.
+// Struct to store information about each IMU data saved (tests at home).
 struct ImuInput
 {
     int index;
@@ -42,7 +42,7 @@ struct ImuInput
 };
 
 
-// 
+// Struct to store information about each IMU data saved (Jetson Board).
 struct ImuInputJetson
 {
     int index;
@@ -65,15 +65,18 @@ struct ImuInputJetson
     float gravZ;
 };
 
-std::mutex myMutex;
+// Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTHCAMERA);
 
+// Buffer to store IMU structs.
 #ifdef JETSON
 RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTHIMU);
 #else
 RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTHIMU);
 #endif
 
+// Global variables that need to be accessed from different threads or methods.
+std::mutex myMutex;
 std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
 std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 std::string dirCameraFolder = "./Data/Camera/";
@@ -81,6 +84,7 @@ std::string dirIMUFolder = "./Data/IMU/";
 bool stopProgram = false;
 bool doneCalibrating = false;
 
+// Pipeline for camera on JEtson Board.
 #ifdef JETSON
 std::string get_tegra_pipeline(int width, int height, int fps)
 {
@@ -90,6 +94,7 @@ std::string get_tegra_pipeline(int width, int height, int fps)
 }
 #endif
 
+// Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread()
 {
 #ifdef JETSON
@@ -107,20 +112,14 @@ void cameraCaptureThread()
         std::cerr << "Error al abrir la cámara." << std::endl;
     else
     {
-        myMutex.lock();
-        bool stop = stopProgram;
-        myMutex.unlock();
-
         int index = 0;
         timeCameraStart = std::chrono::steady_clock::now();
 
-        while (!stop && index < RINGBUFFERLENGTHCAMERA)
+        while (index < RINGBUFFERLENGTHCAMERA)
         {
             std::cout << "Camera: " << index << std::endl;
-            myMutex.lock();
             if (doneCalibrating)
             {
-
                 cv::Mat frame;
                 cap.read(frame);
 
@@ -139,14 +138,12 @@ void cameraCaptureThread()
                     cameraFramesBuffer.Queue(capture);
                     index++;
                 }
-
-                stop = stopProgram;
             }
-            myMutex.unlock();
         }
     }
 }
 
+// Convert string recived from IMU to float data (Tests at home).
 void parseImuData(std::string data, std::vector<float> &parsedData)
 {
     std::stringstream ss(data);
@@ -178,6 +175,7 @@ void parseImuData(std::string data, std::vector<float> &parsedData)
 
 #ifdef JETSON
 
+// Thead in charge of reading data from the IMU.
 void imuThreadJetson()
 {
     int cont = 0;
@@ -185,19 +183,14 @@ void imuThreadJetson()
     BNO055 sensors;
     sensors.openDevice(filename);
 
-    myMutex.lock();
+    // Wait for calibration to finish.
     do
     {
         sensors.readCalibVals();
         doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
     } while (cont++ < 2000 && !doneCalibrating);
+    
     doneCalibrating = true;
-    myMutex.unlock();
-
-    myMutex.lock();
-    bool stop = stopProgram;
-    myMutex.unlock();
-
     int index = 0;
 
     while (!stop && index < RINGBUFFERLENGTHIMU)
@@ -226,17 +219,11 @@ void imuThreadJetson()
         imuInputJetson.gravZ = sensors.gravVect.vi[2] * 0.01;
 
         imuDataJetsonBuffer.Queue(imuInputJetson);
-        myMutex.lock();
-        stop = stopProgram;
-        myMutex.unlock();
-
         index++;
     }
-    myMutex.lock();
-    stop = stopProgram;
-    myMutex.unlock();
 }
 
+// Write IMU data to files.
 void IMUDataJetsonWrite()
 {
     std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
@@ -272,6 +259,7 @@ void IMUDataJetsonWrite()
     }
 }
 
+// Read IMU data from files.
 std::vector<ImuInput> readDataIMUJetson()
 {
     std::vector<ImuInput> IMUData;
@@ -315,6 +303,8 @@ std::vector<ImuInput> readDataIMUJetson()
 }
 
 #else
+
+// Thread in charge of reading data from the IMU (tests at home).
 void imuThread()
 {
     boost::asio::io_service io;
@@ -326,13 +316,9 @@ void imuThread()
         serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
         boost::asio::streambuf buffer;
 
-        myMutex.lock();
-        bool stop = stopProgram;
-        myMutex.unlock();
-
         int index = 0;
 
-        while (!stop && index < RINGBUFFERLENGTHIMU)
+        while (index < RINGBUFFERLENGTHIMU)
         {
             std::cout << "IMU: " << index << std::endl;
             boost::system::error_code ec;
@@ -365,9 +351,7 @@ void imuThread()
                     imuInput.quatY = parsedData[5];
                     imuInput.quatZ = parsedData[6];
 
-                    myMutex.lock();
                     doneCalibrating = true;
-                    myMutex.unlock();
                 }
                 else
                 {
@@ -383,9 +367,6 @@ void imuThread()
                 index++;
                 imuDataBuffer.Queue(imuInput);
             }
-            myMutex.lock();
-            stop = stopProgram;
-            myMutex.unlock();
         }
     }
     catch (std::exception &e)
@@ -396,6 +377,7 @@ void imuThread()
     serial.close();
 }
 
+// Write data from IMU to files (tests at home).
 void IMUDataWrite()
 {
     std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
@@ -421,6 +403,7 @@ void IMUDataWrite()
     }
 }
 
+// Read IMU data from files.
 std::vector<ImuInput> readDataIMU()
 {
     std::vector<ImuInput> IMUData;
@@ -455,6 +438,7 @@ std::vector<ImuInput> readDataIMU()
 
 #endif
 
+// Write camera time data to file and store all frams as .png files.
 void cameraDataWrite()
 {
     std::ofstream cameraTimeFile(dirCameraFolder + "cameraTime", std::ios::out);
@@ -473,6 +457,7 @@ void cameraDataWrite()
     }
 }
 
+// Read camera data and frames from files.
 std::vector<CameraInput> readDataCamera()
 {
     std::vector<CameraInput> cameraData;
@@ -505,6 +490,7 @@ std::vector<CameraInput> readDataCamera()
     return cameraData;
 }
 
+// Main method that creates threads, writes and read data from files and displays data on console.
 int main(int argc, char **argv)
 {
 
