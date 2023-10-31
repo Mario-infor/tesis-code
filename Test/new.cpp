@@ -1,7 +1,11 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-
+#ifdef JETSON
+#include <BNO055-BBB_driver.h>
+#else
+#include <boost/asio.hpp>
+#endif
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -13,13 +17,9 @@
 // Amount of IMU data and frames to read from devices.
 #define RINGBUFFERLENGTHCAMERA 100
 #define RINGBUFFERLENGTHIMU 200
-#define JETSON
+//#define JETSON
 
-#ifdef JETSON
-#include <BNO055-BBB_driver.h>
-#else
-#include <boost/asio.hpp>
-#endif
+
 
 // Struct to store information about each frame saved.
 struct CameraInput
@@ -510,9 +510,9 @@ int main(int argc, char **argv)
     imu.join();
 
     cameraDataWrite();
-    IMUDataWrite();
+    IMUDataJetsonWrite();
 
-    std::vector<ImuInputJetson> imuReadVector = readDataIMU();
+    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
@@ -581,7 +581,7 @@ int main(int argc, char **argv)
             if (imuIndex != 0)
             {
                 wmove(win, 15, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", imuDataJetson.time - oldTimeIMU);
+                snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
                 waddstr(win, buff);
 
                 oldTimeIMU = imuDataJetson.time;
@@ -589,7 +589,7 @@ int main(int argc, char **argv)
             else
             {
                 wmove(win, 15, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", 0);
+                snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
                 waddstr(win, buff);
             }
         }
@@ -614,7 +614,7 @@ int main(int argc, char **argv)
             if (imuIndex != 0)
             {
                 wmove(win, 9, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", imuData.time - oldTimeIMU);
+                snprintf(buff, 511, "Time between captures (IMU): %010d", imuData.time - oldTimeIMU);
                 waddstr(win, buff);
 
                 oldTimeIMU = imuData.time;
@@ -622,7 +622,7 @@ int main(int argc, char **argv)
             else
             {
                 wmove(win, 9, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", 0);
+                snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
                 waddstr(win, buff);
             }
         }
@@ -639,7 +639,7 @@ int main(int argc, char **argv)
             if (cameraIndex != 0)
             {
                 wmove(win, 21, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", frame.time - oldTimeCamera);
+                snprintf(buff, 511, "Time between captures (IMU): %010d", frame.time - oldTimeCamera);
                 waddstr(win, buff);
 
                 oldTimeCamera = frame.time;
@@ -647,7 +647,7 @@ int main(int argc, char **argv)
             else
             {
                 wmove(win, 21, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010ld", 0);
+                snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
                 waddstr(win, buff);
             }
 
