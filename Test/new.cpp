@@ -16,8 +16,8 @@
 #include "RingBuffer.h"
 
 // Amount of IMU data and frames to read from devices.
-#define RINGBUFFERLENGTHCAMERA 3750
-#define RINGBUFFERLENGTHIMU 7500
+#define RINGBUFFERLENGTHCAMERA 1875
+#define RINGBUFFERLENGTHIMU 3750
 //#define JETSON
 
 
