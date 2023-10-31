@@ -122,7 +122,7 @@ void cameraCaptureThread()
             std::cout << "Camera: " << index << std::endl;
             if (doneCalibrating)
             {
-                cv::Mat frame;
+                cv::Mat frame, grayscale;
                 cap.read(frame);
 
                 if (frame.empty())
@@ -132,9 +132,10 @@ void cameraCaptureThread()
                 }
                 else
                 {
+                    cv::cvtColor(frame, grayscale, cv::COLOR_BGR2GRAY);
                     CameraInput capture;
                     capture.index = index;
-                    capture.frame = frame.clone();
+                    capture.frame = grayscale.clone();
                     capture.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count();
 
                     cameraFramesBuffer.Queue(capture);
