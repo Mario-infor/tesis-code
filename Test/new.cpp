@@ -449,9 +449,12 @@ void cameraDataWrite()
     {
         while (!cameraFramesBuffer.QueueIsEmpty())
         {
+            char buff[256];
+
             CameraInput tempFrame;
             cameraFramesBuffer.Dequeue(tempFrame);
-            std::string imageName = "frame_" + std::to_string(tempFrame.index) + ".png";
+            snprintf(buff, 255,"frame_%06d.png", tempFrame.index);
+            std::string imageName(buff);
             cv::imwrite(dirCameraFolder + imageName, tempFrame.frame);
 
             cameraTimeFile << tempFrame.time << std::endl;
