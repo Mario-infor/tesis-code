@@ -1,11 +1,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#ifdef JETSON
-#include <BNO055-BBB_driver.h>
-#else
-#include <boost/asio.hpp>
-#endif
+
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -17,7 +13,13 @@
 // Amount of IMU data and frames to read from devices.
 #define RINGBUFFERLENGTHCAMERA 100
 #define RINGBUFFERLENGTHIMU 200
-// #define JETSON
+#define JETSON
+
+#ifdef JETSON
+#include <BNO055-BBB_driver.h>
+#else
+#include <boost/asio.hpp>
+#endif
 
 // Struct to store information about each frame saved.
 struct CameraInput
@@ -193,7 +195,7 @@ void imuThreadJetson()
     doneCalibrating = true;
     int index = 0;
 
-    while (!stop && index < RINGBUFFERLENGTHIMU)
+    while (index < RINGBUFFERLENGTHIMU)
     {
         sensors.readAll();
 
@@ -231,9 +233,9 @@ void IMUDataJetsonWrite()
 
     if (IMUTimeFile.is_open() && IMUDataFile.is_open())
     {
-        while (!imuDataBuffer.QueueIsEmpty())
+        while (!imuDataJetsonBuffer.QueueIsEmpty())
         {
-            ImuInput tempIMU;
+            ImuInputJetson tempIMU;
             imuDataBuffer.Dequeue(tempIMU);
 
             IMUTimeFile << tempIMU.time << std::endl;
@@ -260,9 +262,9 @@ void IMUDataJetsonWrite()
 }
 
 // Read IMU data from files.
-std::vector<ImuInput> readDataIMUJetson()
+std::vector<ImuInputJetson> readDataIMUJetson()
 {
-    std::vector<ImuInput> IMUData;
+    std::vector<ImuInputJetson> IMUData;
     std::ifstream fileTime(dirIMUFolder + "IMUTime");
     std::ifstream fileData(dirIMUFolder + "IMUData");
 
@@ -273,7 +275,7 @@ std::vector<ImuInput> readDataIMUJetson()
         int value;
         while (fileTime >> value)
         {
-            ImuInput tempIMUInput;
+            ImuInputJetson tempIMUInput;
 
             tempIMUInput.time = value;
 
@@ -510,7 +512,7 @@ int main(int argc, char **argv)
     cameraDataWrite();
     IMUDataWrite();
 
-    std::vector<ImuInput> imuReadVector = readDataIMU();
+    std::vector<ImuInputJetson> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
@@ -552,7 +554,7 @@ int main(int argc, char **argv)
             ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
 
             wmove(win, 3, 2);
-            snprintf(buff, 511, "Index = %0i", imuDataJetson.index);
+            snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
             waddstr(win, buff);
 
             wmove(win, 5, 2);
@@ -598,7 +600,7 @@ int main(int argc, char **argv)
             ImuInput imuData = imuReadVector.at(imuIndex);
 
             wmove(win, 3, 2);
-            snprintf(buff, 511, "Index = %0i", imuData.index);
+            snprintf(buff, 511, "Index = %0d", imuData.index);
             waddstr(win, buff);
 
             wmove(win, 5, 3);
@@ -631,7 +633,7 @@ int main(int argc, char **argv)
             CameraInput frame = cameraReadVector.at(cameraIndex);
 
             wmove(win, 19, 2);
-            snprintf(buff, 511, "Index = %0i", frame.index);
+            snprintf(buff, 511, "Index = %0d", frame.index);
             waddstr(win, buff);
 
             if (cameraIndex != 0)
