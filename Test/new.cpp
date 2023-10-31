@@ -236,7 +236,7 @@ void IMUDataJetsonWrite()
         while (!imuDataJetsonBuffer.QueueIsEmpty())
         {
             ImuInputJetson tempIMU;
-            imuDataBuffer.Dequeue(tempIMU);
+            imuDataJetsonBuffer.Dequeue(tempIMU);
 
             IMUTimeFile << tempIMU.time << std::endl;
 
