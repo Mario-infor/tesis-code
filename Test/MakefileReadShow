@@ -1,0 +1,13 @@
+CPPFLAGS = -g -Wall
+
+CC = g++ 
+PROJECT = readShow
+SRC = readShow.cpp
+LIBS = `pkg-config --cflags --libs opencv4`
+$(PROJECT) : $(SRC)
+	$(CC) $(CPPFLAGS) $(SRC) -o $(PROJECT) $(LIBS)
+
+clean:
+
+	rm readShow
+

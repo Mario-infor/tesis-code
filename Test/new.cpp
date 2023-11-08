@@ -20,8 +20,6 @@
 #define RINGBUFFERLENGTHIMU 3750
 //#define JETSON
 
-
-
 // Struct to store information about each frame saved.
 struct CameraInput
 {

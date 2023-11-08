@@ -4,9 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/include/opencv4/**"
-                //"/usr/local/include/opencv4/opencv2/aruco/**",
-                //"${workspaceFolder}/third-party/include",
+                "/usr/local/include/opencv4/**",
+                "/usr/include/opencv4"
             ],
             "defines": [],
             "cStandard": "c17",
