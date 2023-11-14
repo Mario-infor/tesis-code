@@ -14,6 +14,8 @@
 #include <mutex>
 #include <fstream>
 #include "RingBuffer.h"
+#include <glm/glm.hpp>
+#include <glm/gtx/spline.hpp>
 
 // Amount of IMU data and frames to read from devices.
 #define RINGBUFFERLENGTHCAMERA 1875
