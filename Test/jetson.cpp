@@ -2,7 +2,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <boost/asio.hpp>
+#include <BNO055-BBB_driver.h>
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -16,7 +16,6 @@
 // Amount of IMU data and frames to read from devices.
 #define RINGBUFFERLENGTHCAMERA 1875
 #define RINGBUFFERLENGTHIMU 3750
-//#define JETSON
 
 // Struct to store information about each frame saved.
 struct CameraInput
@@ -26,25 +25,35 @@ struct CameraInput
     cv::Mat frame;
 };
 
-// Struct to store information about each IMU data saved (tests at home).
-struct ImuInput
+// Struct to store information about each IMU data saved (Jetson Board).
+struct ImuInputJetson
 {
     int index;
     int time;
-    float accX;
-    float accY;
-    float accZ;
+    float gyroX;
+    float gyroY;
+    float gyroZ;
+    float eulerX;
+    float eulerY;
+    float eulerZ;
     float quatX;
     float quatY;
     float quatZ;
     float quatW;
+    float accX;
+    float accY;
+    float accZ;
+    float gravX;
+    float gravY;
+    float gravZ;
 };
 
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTHCAMERA);
 
 // Buffer to store IMU structs.
-RingBuffer<ImuInput> imuDataBuffer = RingBuffer<ImuInput>(RINGBUFFERLENGTHIMU);
+
+RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTHIMU);
 
 // Global variables that need to be accessed from different threads or methods.
 std::mutex myMutex;
@@ -55,10 +64,24 @@ std::string dirIMUFolder = "./Data/IMU/";
 bool stopProgram = false;
 bool doneCalibrating = false;
 
+// Pipeline for camera on JEtson Board.
+
+std::string get_tegra_pipeline(int width, int height, int fps)
+{
+    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
+           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
+           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+}
+
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread()
 {
-    cv::VideoCapture cap(0);
+    int WIDTH = 640;
+    int HEIGHT = 360;
+    int FPS = 60;
+    std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
+    cv::VideoCapture cap;
+    cap.open(pipeline, cv::CAP_GSTREAMER);
 
     if (!cap.isOpened())
         std::cerr << "Error al abrir la cámara." << std::endl;
@@ -96,139 +119,94 @@ void cameraCaptureThread()
     }
 }
 
-// Convert string recived from IMU to float data (Tests at home).
-void parseImuData(std::string data, std::vector<float> &parsedData)
+// Thead in charge of reading data from the IMU.
+void imuThreadJetson()
 {
-    std::stringstream ss(data);
-    std::vector<std::string> splitData;
-    std::string temp;
+    int cont = 0;
+    char filename[] = "/dev/i2c-1";
+    BNO055 sensors;
+    sensors.openDevice(filename);
 
-    while (std::getline(ss, temp, ','))
+    // Wait for calibration to finish.
+    do
     {
-        splitData.push_back(temp);
-    }
+        sensors.readCalibVals();
+        doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
+    } while (cont++ < 2000 && !doneCalibrating);
+    
+    doneCalibrating = true;
+    int index = 0;
 
-    for (const std::string &item : splitData)
+    while (index < RINGBUFFERLENGTHIMU)
     {
-        try
-        {
-            float number = std::stof(item);
-            parsedData.push_back(number);
-        }
-        catch (const std::invalid_argument &e)
-        {
-            std::cerr << "Error: Could not convert string to float. " << e.what() << std::endl;
-        }
-        catch (const std::out_of_range &e)
-        {
-            std::cerr << "Error: Value is out of float range. " << e.what() << std::endl;
-        }
+        sensors.readAll();
+
+        ImuInputJetson imuInputJetson;
+        imuInputJetson.index = index;
+        imuInputJetson.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count();
+
+        imuInputJetson.gyroX = sensors.gyroVect.vi[0] * 0.01;
+        imuInputJetson.gyroY = sensors.gyroVect.vi[1] * 0.01;
+        imuInputJetson.gyroZ = sensors.gyroVect.vi[2] * 0.01;
+        imuInputJetson.eulerX = sensors.eOrientation.vi[0] * sensors.Scale;
+        imuInputJetson.eulerY = sensors.eOrientation.vi[1] * sensors.Scale;
+        imuInputJetson.eulerZ = sensors.eOrientation.vi[2] * sensors.Scale;
+        imuInputJetson.quatX = sensors.qOrientation.vi[0] * sensors.Scale;
+        imuInputJetson.quatY = sensors.qOrientation.vi[1] * sensors.Scale;
+        imuInputJetson.quatZ = sensors.qOrientation.vi[2] * sensors.Scale;
+        imuInputJetson.quatW = sensors.qOrientation.vi[3] * sensors.Scale;
+        imuInputJetson.accX = sensors.accelVect.vi[0] * sensors.Scale;
+        imuInputJetson.accY = sensors.accelVect.vi[1] * sensors.Scale;
+        imuInputJetson.accZ = sensors.accelVect.vi[2] * sensors.Scale;
+        imuInputJetson.gravX = sensors.gravVect.vi[0] * 0.01;
+        imuInputJetson.gravY = sensors.gravVect.vi[1] * 0.01;
+        imuInputJetson.gravZ = sensors.gravVect.vi[2] * 0.01;
+
+        imuDataJetsonBuffer.Queue(imuInputJetson);
+        index++;
     }
 }
 
-// Thread in charge of reading data from the IMU (tests at home).
-void imuThread()
-{
-    boost::asio::io_service io;
-    boost::asio::serial_port serial(io);
-
-    try
-    {
-        serial.open("/dev/ttyACM0");
-        serial.set_option(boost::asio::serial_port_base::baud_rate(9600));
-        boost::asio::streambuf buffer;
-
-        int index = 0;
-
-        while (index < RINGBUFFERLENGTHIMU)
-        {
-            std::cout << "IMU: " << index << std::endl;
-            boost::system::error_code ec;
-            boost::asio::read_until(serial, buffer, '\n', ec);
-
-            ImuInput imuInput;
-            imuInput.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count();
-
-            if (ec)
-            {
-                std::cout << ec.what();
-            }
-            else
-            {
-                std::string receivedData;
-                std::istream is(&buffer);
-                std::getline(is, receivedData);
-
-                std::vector<float> parsedData;
-                parseImuData(receivedData, parsedData);
-
-                if (parsedData.size() == 7)
-                {
-                    imuInput.index = index;
-                    imuInput.accX = parsedData[0];
-                    imuInput.accY = parsedData[1];
-                    imuInput.accZ = parsedData[2];
-                    imuInput.quatW = parsedData[3];
-                    imuInput.quatX = parsedData[4];
-                    imuInput.quatY = parsedData[5];
-                    imuInput.quatZ = parsedData[6];
-
-                    doneCalibrating = true;
-                }
-                else
-                {
-                    imuInput.index = index;
-                    imuInput.accX = 0;
-                    imuInput.accY = 0;
-                    imuInput.accZ = 0;
-                    imuInput.quatW = 0;
-                    imuInput.quatX = 0;
-                    imuInput.quatY = 0;
-                    imuInput.quatZ = 0;
-                }
-                index++;
-                imuDataBuffer.Queue(imuInput);
-            }
-        }
-    }
-    catch (std::exception &e)
-    {
-        std::cerr << "Error: " << e.what() << std::endl;
-    }
-
-    serial.close();
-}
-
-// Write data from IMU to files (tests at home).
-void IMUDataWrite()
+// Write IMU data to files.
+void IMUDataJetsonWrite()
 {
     std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
     std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
 
     if (IMUTimeFile.is_open() && IMUDataFile.is_open())
     {
-        while (!imuDataBuffer.QueueIsEmpty())
+        while (!imuDataJetsonBuffer.QueueIsEmpty())
         {
-            ImuInput tempIMU;
-            imuDataBuffer.Dequeue(tempIMU);
+            ImuInputJetson tempIMU;
+            imuDataJetsonBuffer.Dequeue(tempIMU);
 
             IMUTimeFile << tempIMU.time << std::endl;
+
             IMUDataFile << tempIMU.index << std::endl;
-            IMUDataFile << tempIMU.accX << std::endl;
-            IMUDataFile << tempIMU.accY << std::endl;
-            IMUDataFile << tempIMU.accZ << std::endl;
-            IMUDataFile << tempIMU.quatW << std::endl;
+            IMUDataFile << tempIMU.gyroX << std::endl;
+            IMUDataFile << tempIMU.gyroY << std::endl;
+            IMUDataFile << tempIMU.gyroZ << std::endl;
+            IMUDataFile << tempIMU.eulerX << std::endl;
+            IMUDataFile << tempIMU.eulerY << std::endl;
+            IMUDataFile << tempIMU.eulerZ << std::endl;
             IMUDataFile << tempIMU.quatX << std::endl;
             IMUDataFile << tempIMU.quatY << std::endl;
             IMUDataFile << tempIMU.quatZ << std::endl;
+            IMUDataFile << tempIMU.quatW << std::endl;
+            IMUDataFile << tempIMU.accX << std::endl;
+            IMUDataFile << tempIMU.accY << std::endl;
+            IMUDataFile << tempIMU.accZ << std::endl;
+            IMUDataFile << tempIMU.gravX << std::endl;
+            IMUDataFile << tempIMU.gravY << std::endl;
+            IMUDataFile << tempIMU.gravZ << std::endl;
         }
     }
 }
 
 // Read IMU data from files.
-std::vector<ImuInput> readDataIMU()
+std::vector<ImuInputJetson> readDataIMUJetson()
 {
-    std::vector<ImuInput> IMUData;
+    std::vector<ImuInputJetson> IMUData;
     std::ifstream fileTime(dirIMUFolder + "IMUTime");
     std::ifstream fileData(dirIMUFolder + "IMUData");
 
@@ -239,17 +217,27 @@ std::vector<ImuInput> readDataIMU()
         int value;
         while (fileTime >> value)
         {
-            ImuInput tempIMUInput;
+            ImuInputJetson tempIMUInput;
 
             tempIMUInput.time = value;
+
             fileData >> tempIMUInput.index;
-            fileData >> tempIMUInput.accX;
-            fileData >> tempIMUInput.accY;
-            fileData >> tempIMUInput.accZ;
-            fileData >> tempIMUInput.quatW;
+            fileData >> tempIMUInput.gyroX;
+            fileData >> tempIMUInput.gyroY;
+            fileData >> tempIMUInput.gyroZ;
+            fileData >> tempIMUInput.eulerX;
+            fileData >> tempIMUInput.eulerY;
+            fileData >> tempIMUInput.eulerZ;
             fileData >> tempIMUInput.quatX;
             fileData >> tempIMUInput.quatY;
             fileData >> tempIMUInput.quatZ;
+            fileData >> tempIMUInput.quatW;
+            fileData >> tempIMUInput.accX;
+            fileData >> tempIMUInput.accY;
+            fileData >> tempIMUInput.accZ;
+            fileData >> tempIMUInput.gravX;
+            fileData >> tempIMUInput.gravY;
+            fileData >> tempIMUInput.gravZ;
 
             IMUData.push_back(tempIMUInput);
         }
@@ -257,6 +245,7 @@ std::vector<ImuInput> readDataIMU()
 
     return IMUData;
 }
+
 
 // Write camera time data to file and store all frams as .png files.
 void cameraDataWrite()
@@ -320,20 +309,15 @@ int main(int argc, char **argv)
     timeIMUStart = std::chrono::steady_clock::now();
 
     std::thread cameraCapture(cameraCaptureThread);
-
-#ifdef JETSON
     std::thread imu(imuThreadJetson);
-#else
-    std::thread imu(imuThread);
-#endif
 
     cameraCapture.join();
     imu.join();
 
     cameraDataWrite();
-    IMUDataWrite();
+    IMUDataJetsonWrite();
 
-    std::vector<ImuInput> imuReadVector = readDataIMU();
+    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
@@ -369,33 +353,47 @@ int main(int argc, char **argv)
             stopProgram = true;
         }
 
+
         if (imuIndex < imuReadVector.size())
         {
-            ImuInput imuData = imuReadVector.at(imuIndex);
+            ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
 
             wmove(win, 3, 2);
-            snprintf(buff, 511, "Index = %0d", imuData.index);
+            snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
             waddstr(win, buff);
 
-            wmove(win, 5, 3);
-            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
+            wmove(win, 5, 2);
+            snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
             waddstr(win, buff);
 
             wmove(win, 7, 2);
-            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
+            snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerX, imuDataJetson.eulerY, imuDataJetson.eulerZ);
+            waddstr(win, buff);
+
+            wmove(win, 9, 2);
+            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuDataJetson.quatX,
+                     imuDataJetson.quatY, imuDataJetson.quatZ, imuDataJetson.quatW);
+            waddstr(win, buff);
+
+            wmove(win, 11, 3);
+            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accX, imuDataJetson.accY, imuDataJetson.accZ);
+            waddstr(win, buff);
+
+            wmove(win, 13, 2);
+            snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
             waddstr(win, buff);
 
             if (imuIndex != 0)
             {
-                wmove(win, 9, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010d", imuData.time - oldTimeIMU);
+                wmove(win, 15, 2);
+                snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
                 waddstr(win, buff);
 
-                oldTimeIMU = imuData.time;
+                oldTimeIMU = imuDataJetson.time;
             }
             else
             {
-                wmove(win, 9, 2);
+                wmove(win, 15, 2);
                 snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
                 waddstr(win, buff);
             }
