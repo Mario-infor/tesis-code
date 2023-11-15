@@ -64,6 +64,7 @@ std::string dirIMUFolder = "./Data/IMU/";
 bool stopProgram = false;
 bool doneCalibrating = false;
 bool generateNewData = true;
+bool preccessData = false;
 
 // Pipeline for camera on JEtson Board.
 
@@ -371,158 +372,161 @@ int main()
         IMUDataJetsonWrite();
     }
 
-    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
-    std::vector<CameraInput> cameraReadVector = readDataCamera();
-
-    std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
-    std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
-
-    std::cout << "Spline points: " << std::endl;
-    for (size_t i = 0; i < splinePoints.size(); i++)
+    if (proccessData)
     {
-        std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
-    }
+        std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
+        std::vector<CameraInput> cameraReadVector = readDataCamera();
 
-    std::cout << "Slerp points: " << std::endl;
-    for (size_t i = 0; i < slerpPoints.size(); i++)
-    {
-        std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
-    }
+        /*std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+        std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
 
-    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
-
-    cv::Mat cameraMatrix, distCoeffs;
-
-    cameraMatrix = (cv::Mat_<double>(3, 3) << 1.4149463861018060e+03, 0.0, 9.6976370017096372e+02,
-                    0.0, 1.4149463861018060e+03, 5.3821002771506880e+02,
-                    0.0, 0.0, 1.0);
-
-    distCoeffs = (cv::Mat_<double>(1, 5) << 1.8580734579482813e-01, -5.5388292695096419e-01, 1.9639104707396063e-03,
-                  4.5272274621161552e-03, 5.3671862979121965e-01);
-
-    WINDOW *win;
-    char buff[512];
-
-    myMutex.lock();
-    bool stop = stopProgram;
-    myMutex.unlock();
-
-    win = initscr();
-    clearok(win, TRUE);
-
-    size_t imuIndex = 0;
-    size_t cameraIndex = 0;
-
-    int oldTimeIMU = 0;
-    int oldTimeCamera = 0;
-
-    while ((imuIndex < imuReadVector.size() || cameraIndex < cameraReadVector.size()) && !stop)
-    {
-        if (cv::waitKey(1) == 'q')
+        std::cout << "Spline points: " << std::endl;
+        for (size_t i = 0; i < splinePoints.size(); i++)
         {
-            stopProgram = true;
+            std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
         }
 
-        if (imuIndex < imuReadVector.size())
+        std::cout << "Slerp points: " << std::endl;
+        for (size_t i = 0; i < slerpPoints.size(); i++)
         {
-            ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
+            std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
+        }*/
 
-            wmove(win, 3, 2);
-            snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
-            waddstr(win, buff);
+        cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
-            wmove(win, 5, 2);
-            snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
-            waddstr(win, buff);
+        cv::Mat cameraMatrix, distCoeffs;
 
-            wmove(win, 7, 2);
-            snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerX, imuDataJetson.eulerY, imuDataJetson.eulerZ);
-            waddstr(win, buff);
+        cameraMatrix = (cv::Mat_<double>(3, 3) << 1.4149463861018060e+03, 0.0, 9.6976370017096372e+02,
+                        0.0, 1.4149463861018060e+03, 5.3821002771506880e+02,
+                        0.0, 0.0, 1.0);
 
-            wmove(win, 9, 2);
-            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuDataJetson.quatX,
-                     imuDataJetson.quatY, imuDataJetson.quatZ, imuDataJetson.quatW);
-            waddstr(win, buff);
+        distCoeffs = (cv::Mat_<double>(1, 5) << 1.8580734579482813e-01, -5.5388292695096419e-01, 1.9639104707396063e-03,
+                      4.5272274621161552e-03, 5.3671862979121965e-01);
 
-            wmove(win, 11, 3);
-            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accX, imuDataJetson.accY, imuDataJetson.accZ);
-            waddstr(win, buff);
+        WINDOW *win;
+        char buff[512];
 
-            wmove(win, 13, 2);
-            snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
-            waddstr(win, buff);
+        myMutex.lock();
+        bool stop = stopProgram;
+        myMutex.unlock();
 
-            if (imuIndex != 0)
-            {
-                wmove(win, 15, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
-                waddstr(win, buff);
+        win = initscr();
+        clearok(win, TRUE);
 
-                oldTimeIMU = imuDataJetson.time;
-            }
-            else
-            {
-                wmove(win, 15, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
-                waddstr(win, buff);
-            }
-        }
+        size_t imuIndex = 0;
+        size_t cameraIndex = 0;
 
-        if (cameraIndex < cameraReadVector.size())
+        int oldTimeIMU = 0;
+        int oldTimeCamera = 0;
+
+        while ((imuIndex < imuReadVector.size() || cameraIndex < cameraReadVector.size()) && !stop)
         {
-            CameraInput frame = cameraReadVector.at(cameraIndex);
-
-            wmove(win, 19, 2);
-            snprintf(buff, 511, "Index = %0d", frame.index);
-            waddstr(win, buff);
-
-            if (cameraIndex != 0)
+            if (cv::waitKey(1) == 'q')
             {
-                wmove(win, 21, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010d", frame.time - oldTimeCamera);
-                waddstr(win, buff);
-
-                oldTimeCamera = frame.time;
-            }
-            else
-            {
-                wmove(win, 21, 2);
-                snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
-                waddstr(win, buff);
+                stopProgram = true;
             }
 
-            std::vector<int> markerIds;
-            std::vector<std::vector<cv::Point2f>> markerCorners;
-
-            cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
-
-            if (markerIds.size() > 0)
+            if (imuIndex < imuReadVector.size())
             {
-                cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+                ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
 
-                std::vector<cv::Vec3d> rvecs, tvecs;
-                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+                wmove(win, 3, 2);
+                snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
+                waddstr(win, buff);
 
-                for (int i = 0; i < (int)rvecs.size(); i++)
+                wmove(win, 5, 2);
+                snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
+                waddstr(win, buff);
+
+                wmove(win, 7, 2);
+                snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerX, imuDataJetson.eulerY, imuDataJetson.eulerZ);
+                waddstr(win, buff);
+
+                wmove(win, 9, 2);
+                snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuDataJetson.quatX,
+                         imuDataJetson.quatY, imuDataJetson.quatZ, imuDataJetson.quatW);
+                waddstr(win, buff);
+
+                wmove(win, 11, 3);
+                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accX, imuDataJetson.accY, imuDataJetson.accZ);
+                waddstr(win, buff);
+
+                wmove(win, 13, 2);
+                snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
+                waddstr(win, buff);
+
+                if (imuIndex != 0)
                 {
-                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
+                    wmove(win, 15, 2);
+                    snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
+                    waddstr(win, buff);
+
+                    oldTimeIMU = imuDataJetson.time;
+                }
+                else
+                {
+                    wmove(win, 15, 2);
+                    snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
+                    waddstr(win, buff);
                 }
             }
 
-            cv::imshow("draw axis", frame.frame);
+            if (cameraIndex < cameraReadVector.size())
+            {
+                CameraInput frame = cameraReadVector.at(cameraIndex);
+
+                wmove(win, 19, 2);
+                snprintf(buff, 511, "Index = %0d", frame.index);
+                waddstr(win, buff);
+
+                if (cameraIndex != 0)
+                {
+                    wmove(win, 21, 2);
+                    snprintf(buff, 511, "Time between captures (IMU): %010d", frame.time - oldTimeCamera);
+                    waddstr(win, buff);
+
+                    oldTimeCamera = frame.time;
+                }
+                else
+                {
+                    wmove(win, 21, 2);
+                    snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
+                    waddstr(win, buff);
+                }
+
+                std::vector<int> markerIds;
+                std::vector<std::vector<cv::Point2f>> markerCorners;
+
+                cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
+
+                if (markerIds.size() > 0)
+                {
+                    cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+
+                    std::vector<cv::Vec3d> rvecs, tvecs;
+                    cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+
+                    for (int i = 0; i < (int)rvecs.size(); i++)
+                    {
+                        cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
+                    }
+                }
+
+                cv::imshow("draw axis", frame.frame);
+            }
+
+            cv::waitKey(33);
+
+            wrefresh(win);
+            wclear(win);
+
+            imuIndex++;
+            cameraIndex++;
+            stop = stopProgram;
         }
 
-        cv::waitKey(33);
-
-        wrefresh(win);
-        wclear(win);
-
-        imuIndex++;
-        cameraIndex++;
-        stop = stopProgram;
+        endwin();
     }
-
-    endwin();
 
     return 0;
 }
