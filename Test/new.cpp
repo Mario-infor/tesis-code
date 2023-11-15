@@ -12,6 +12,7 @@
 #include "RingBuffer.h"
 #include <glm/glm.hpp>
 #include <glm/gtx/spline.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 // Amount of IMU data and frames to read from devices.
 #define RINGBUFFERLENGTHCAMERA 50
@@ -341,6 +342,29 @@ std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
     return points;
 }
 
+// Create slerp points for quaternions (tests at home).
+std::vector<glm::quat> createSlerpPoint(std::vector<ImuInput> imuReadVector)
+{
+    std::vector<glm::quat> points;
+
+    for (size_t i = 0; i < imuReadVector.size() - 1; i++)
+    {
+        std::vector<glm::quat> controlPoints = {
+            glm::quat(imuReadVector[i].quatW, imuReadVector[i].quatX, imuReadVector[i].quatY, imuReadVector[i].quatZ),
+            glm::quat(imuReadVector[i + 1].quatW, imuReadVector[i + 1].quatX, imuReadVector[i + 1].quatY, imuReadVector[i + 1].quatZ),
+        };
+
+        // Create a for loop for t values from 0 to 1 with a step of 0.1.
+        for (float t = 0; t < 1; t += 0.1)
+        {
+            glm::quat tempPoint = glm::slerp(controlPoints[0], controlPoints[1], t);
+            points.push_back(tempPoint);
+        }
+    }
+
+    return points;
+}
+
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
@@ -362,11 +386,18 @@ int main()
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
     std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+    std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
 
     std::cout << "Spline points: " << std::endl;
     for (size_t i = 0; i < splinePoints.size(); i++)
     {
         std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
+    }
+
+    std::cout << "Slerp points: " << std::endl;
+    for (size_t i = 0; i < slerpPoints.size(); i++)
+    {
+        std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
     }
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
