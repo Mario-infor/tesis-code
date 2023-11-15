@@ -307,7 +307,7 @@ std::vector<CameraInput> readDataCamera()
 }
 
 // Create spline points (tests at home).
-std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
+std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector)
 {
     std::vector<glm::vec3> points;
 
@@ -332,7 +332,7 @@ std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
 }
 
 // Create slerp points for quaternions (tests at home).
-std::vector<glm::quat> createSlerpPoint(std::vector<ImuInput> imuReadVector)
+std::vector<glm::quat> createSlerpPoint(std::vector<ImuInputJetson> imuReadVector)
 {
     std::vector<glm::quat> points;
 
