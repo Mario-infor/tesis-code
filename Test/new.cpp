@@ -53,6 +53,7 @@ std::string dirCameraFolder = "./Data/Camera/";
 std::string dirIMUFolder = "./Data/IMU/";
 bool stopProgram = false;
 bool doneCalibrating = false;
+bool generateNewData = false;
 
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread()
@@ -289,6 +290,8 @@ std::vector<CameraInput> readDataCamera()
     std::string imageName = "";
     cv::Mat image;
 
+    char buff[256];
+
     if (!fileTime)
         std::cerr << "File not found." << std::endl;
     else
@@ -300,8 +303,9 @@ std::vector<CameraInput> readDataCamera()
             tempCameraInput.time = value;
             tempCameraInput.index = index;
 
-            imageName = "frame_" + std::to_string(index) + ".png";
-            image = cv::imread(dirCameraFolder + imageName);
+            snprintf(buff, 255, "frame_%06d.png", tempCameraInput.index);
+            std::string imageName(buff);
+            image = cv::imread(dirCameraFolder + imageName, cv::IMREAD_GRAYSCALE);
             image.copyTo(tempCameraInput.frame);
 
             cameraData.push_back(tempCameraInput);
@@ -321,13 +325,13 @@ std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
     {
         std::vector<glm::vec3> controlPoints = {
             glm::vec3(imuReadVector[i].accX, imuReadVector[i].accY, imuReadVector[i].accZ),
-            glm::vec3(imuReadVector[i+1].accX, imuReadVector[i+1].accY, imuReadVector[i+1].accZ),
-            glm::vec3(imuReadVector[i+2].accX, imuReadVector[i+2].accY, imuReadVector[i+2].accZ),
-            glm::vec3(imuReadVector[i+3].accX, imuReadVector[i+3].accY, imuReadVector[i+3].accZ),
+            glm::vec3(imuReadVector[i + 1].accX, imuReadVector[i + 1].accY, imuReadVector[i + 1].accZ),
+            glm::vec3(imuReadVector[i + 2].accX, imuReadVector[i + 2].accY, imuReadVector[i + 2].accZ),
+            glm::vec3(imuReadVector[i + 3].accX, imuReadVector[i + 3].accY, imuReadVector[i + 3].accZ),
         };
 
         // Create a for loop for t values from 0 to 1 with a step of 0.1.
-        for (float t = 0; t < 1; t+=0.1)
+        for (float t = 0; t < 1; t += 0.1)
         {
             glm::vec3 tempPoint = glm::catmullRom(controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3], t);
             points.push_back(tempPoint);
@@ -342,14 +346,17 @@ int main()
 {
     timeIMUStart = std::chrono::steady_clock::now();
 
-    // std::thread cameraCapture(cameraCaptureThread);
-    std::thread imu(imuThread);
+    if (generateNewData)
+    {
+        std::thread cameraCapture(cameraCaptureThread);
+        std::thread imu(imuThread);
 
-    // cameraCapture.join();
-    imu.join();
+        cameraCapture.join();
+        imu.join();
 
-    cameraDataWrite();
-    IMUDataWrite();
+        cameraDataWrite();
+        IMUDataWrite();
+    }
 
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();

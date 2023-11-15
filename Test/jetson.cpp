@@ -63,6 +63,7 @@ std::string dirCameraFolder = "./Data/Camera/";
 std::string dirIMUFolder = "./Data/IMU/";
 bool stopProgram = false;
 bool doneCalibrating = false;
+bool generateNewData = false;
 
 // Pipeline for camera on JEtson Board.
 
@@ -133,7 +134,7 @@ void imuThreadJetson()
         sensors.readCalibVals();
         doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
     } while (cont++ < 2000 && !doneCalibrating);
-    
+
     doneCalibrating = true;
     int index = 0;
 
@@ -246,7 +247,6 @@ std::vector<ImuInputJetson> readDataIMUJetson()
     return IMUData;
 }
 
-
 // Write camera time data to file and store all frams as .png files.
 void cameraDataWrite()
 {
@@ -260,7 +260,7 @@ void cameraDataWrite()
 
             CameraInput tempFrame;
             cameraFramesBuffer.Dequeue(tempFrame);
-            snprintf(buff, 255,"frame_%06d.png", tempFrame.index);
+            snprintf(buff, 255, "frame_%06d.png", tempFrame.index);
             std::string imageName(buff);
             cv::imwrite(dirCameraFolder + imageName, tempFrame.frame);
 
@@ -279,6 +279,8 @@ std::vector<CameraInput> readDataCamera()
     std::string imageName = "";
     cv::Mat image;
 
+    char buff[256];
+
     if (!fileTime)
         std::cerr << "File not found." << std::endl;
     else
@@ -290,8 +292,10 @@ std::vector<CameraInput> readDataCamera()
             tempCameraInput.time = value;
             tempCameraInput.index = index;
 
-            imageName = "frame_" + std::to_string(index) + ".png";
-            image = cv::imread(dirCameraFolder + imageName);
+            snprintf(buff, 255, "frame_%06d.png", tempCameraInput.index);
+            // imageName = "frame_" + std::to_string(index) + ".png";
+            std::string imageName(buff);
+            image = cv::imread(dirCameraFolder + imageName, cv::IMREAD_GRAYSCALE);
             image.copyTo(tempCameraInput.frame);
 
             cameraData.push_back(tempCameraInput);
@@ -300,6 +304,31 @@ std::vector<CameraInput> readDataCamera()
     }
 
     return cameraData;
+}
+
+// Create spline points (tests at home).
+std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
+{
+    std::vector<glm::vec3> points;
+
+    for (size_t i = 0; i < imuReadVector.size() - 4; i++)
+    {
+        std::vector<glm::vec3> controlPoints = {
+            glm::vec3(imuReadVector[i].accX, imuReadVector[i].accY, imuReadVector[i].accZ),
+            glm::vec3(imuReadVector[i + 1].accX, imuReadVector[i + 1].accY, imuReadVector[i + 1].accZ),
+            glm::vec3(imuReadVector[i + 2].accX, imuReadVector[i + 2].accY, imuReadVector[i + 2].accZ),
+            glm::vec3(imuReadVector[i + 3].accX, imuReadVector[i + 3].accY, imuReadVector[i + 3].accZ),
+        };
+
+        // Create a for loop for t values from 0 to 1 with a step of 0.1.
+        for (float t = 0; t < 1; t += 0.1)
+        {
+            glm::vec3 tempPoint = glm::catmullRom(controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3], t);
+            points.push_back(tempPoint);
+        }
+    }
+
+    return points;
 }
 
 // Main method that creates threads, writes and read data from files and displays data on console.
@@ -320,15 +349,24 @@ int main()
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
+    std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+
+    std::cout << "Spline points: " << std::endl;
+    for (size_t i = 0; i < splinePoints.size(); i++)
+    {
+        std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
+    }
+
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
     cv::Mat cameraMatrix, distCoeffs;
 
-    cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
-                    0, 660.76768, 242.771412,
-                    0, 0, 1);
+    cameraMatrix = (cv::Mat_<double>(3, 3) << 1.4149463861018060e+03, 0.0, 9.6976370017096372e+02,
+                    0.0, 1.4149463861018060e+03, 5.3821002771506880e+02,
+                    0.0, 0.0, 1.0);
 
-    distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
+    distCoeffs = (cv::Mat_<double>(1, 5) << 1.8580734579482813e-01, -5.5388292695096419e-01, 1.9639104707396063e-03,
+                  4.5272274621161552e-03, 5.3671862979121965e-01);
 
     WINDOW *win;
     char buff[512];
@@ -352,7 +390,6 @@ int main()
         {
             stopProgram = true;
         }
-
 
         if (imuIndex < imuReadVector.size())
         {
