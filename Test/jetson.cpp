@@ -372,7 +372,7 @@ int main()
         IMUDataJetsonWrite();
     }
 
-    if (proccessData)
+    if (preccessData)
     {
         std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
         std::vector<CameraInput> cameraReadVector = readDataCamera();
