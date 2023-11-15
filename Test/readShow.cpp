@@ -14,6 +14,14 @@ struct CameraInput
     cv::Mat frame;
 };
 
+// Pipeline for camera on JEtson Board.
+std::string get_tegra_pipeline(int width, int height, int fps)
+{
+    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
+           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
+           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+}
+
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main(int argc, char **argv)
 {
