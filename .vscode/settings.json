@@ -72,6 +72,11 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "*.ipp": "cpp",
-        "readshowcpp": "cpp"
+        "readshowcpp": "cpp",
+        "strstream": "cpp",
+        "bitset": "cpp",
+        "cfenv": "cpp",
+        "ranges": "cpp",
+        "valarray": "cpp"
     }
 }

@@ -303,7 +303,7 @@ std::vector<CameraInput> readDataCamera()
 }
 
 // Main method that creates threads, writes and read data from files and displays data on console.
-int main(int argc, char **argv)
+int main()
 {
 
     timeIMUStart = std::chrono::steady_clock::now();

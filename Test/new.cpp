@@ -14,9 +14,8 @@
 #include <glm/gtx/spline.hpp>
 
 // Amount of IMU data and frames to read from devices.
-#define RINGBUFFERLENGTHCAMERA 1875
-#define RINGBUFFERLENGTHIMU 3750
-//#define JETSON
+#define RINGBUFFERLENGTHCAMERA 50
+#define RINGBUFFERLENGTHIMU 100
 
 // Struct to store information about each frame saved.
 struct CameraInput
@@ -271,7 +270,7 @@ void cameraDataWrite()
 
             CameraInput tempFrame;
             cameraFramesBuffer.Dequeue(tempFrame);
-            snprintf(buff, 255,"frame_%06d.png", tempFrame.index);
+            snprintf(buff, 255, "frame_%06d.png", tempFrame.index);
             std::string imageName(buff);
             cv::imwrite(dirCameraFolder + imageName, tempFrame.frame);
 
@@ -313,21 +312,40 @@ std::vector<CameraInput> readDataCamera()
     return cameraData;
 }
 
-// Main method that creates threads, writes and read data from files and displays data on console.
-int main(int argc, char **argv)
+// Create spline points (tests at home).
+std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
 {
+    std::vector<glm::vec3> points;
 
+    for (size_t i = 0; i < imuReadVector.size() - 4; i++)
+    {
+        std::vector<glm::vec3> controlPoints = {
+            glm::vec3(imuReadVector[i].accX, imuReadVector[i].accY, imuReadVector[i].accZ),
+            glm::vec3(imuReadVector[i+1].accX, imuReadVector[i+1].accY, imuReadVector[i+1].accZ),
+            glm::vec3(imuReadVector[i+2].accX, imuReadVector[i+2].accY, imuReadVector[i+2].accZ),
+            glm::vec3(imuReadVector[i+3].accX, imuReadVector[i+3].accY, imuReadVector[i+3].accZ),
+        };
+
+        // Create a for loop for t values from 0 to 1 with a step of 0.1.
+        for (float t = 0; t < 1; t+=0.1)
+        {
+            glm::vec3 tempPoint = glm::catmullRom(controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3], t);
+            points.push_back(tempPoint);
+        }
+    }
+
+    return points;
+}
+
+// Main method that creates threads, writes and read data from files and displays data on console.
+int main()
+{
     timeIMUStart = std::chrono::steady_clock::now();
 
-    std::thread cameraCapture(cameraCaptureThread);
-
-#ifdef JETSON
-    std::thread imu(imuThreadJetson);
-#else
+    // std::thread cameraCapture(cameraCaptureThread);
     std::thread imu(imuThread);
-#endif
 
-    cameraCapture.join();
+    // cameraCapture.join();
     imu.join();
 
     cameraDataWrite();
@@ -335,6 +353,14 @@ int main(int argc, char **argv)
 
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
+
+    std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+
+    std::cout << "Spline points: " << std::endl;
+    for (size_t i = 0; i < splinePoints.size(); i++)
+    {
+        std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
+    }
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
