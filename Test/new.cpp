@@ -404,11 +404,11 @@ int main()
 
     cv::Mat cameraMatrix, distCoeffs;
 
-    cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
-                    0, 660.76768, 242.771412,
+    cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
+                    0, 495.25862058, 166.53292108,
                     0, 0, 1);
 
-    distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
+    distCoeffs = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
 
     WINDOW *win;
     char buff[512];
