@@ -2,7 +2,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <BNO055-BBB_driver.h>
+//#include <BNO055-BBB_driver.h>
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -12,6 +12,7 @@
 #include "RingBuffer.h"
 #include <glm/glm.hpp>
 #include <glm/gtx/spline.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 // Amount of IMU data and frames to read from devices.
 #define RINGBUFFERLENGTHCAMERA 1875
@@ -30,22 +31,11 @@ struct ImuInputJetson
 {
     int index;
     int time;
-    float gyroX;
-    float gyroY;
-    float gyroZ;
-    float eulerX;
-    float eulerY;
-    float eulerZ;
-    float quatX;
-    float quatY;
-    float quatZ;
-    float quatW;
-    float accX;
-    float accY;
-    float accZ;
-    float gravX;
-    float gravY;
-    float gravZ;
+    glm::vec3 gyroVect;
+    glm::vec3 eulerVect;
+    glm::quat rotQuat;
+    glm::vec3 accVect;
+    glm::vec3 gravVect;
 };
 
 // Buffer to store camera structs.
@@ -147,22 +137,13 @@ void imuThreadJetson()
         imuInputJetson.index = index;
         imuInputJetson.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count();
 
-        imuInputJetson.gyroX = sensors.gyroVect.vi[0] * 0.01;
-        imuInputJetson.gyroY = sensors.gyroVect.vi[1] * 0.01;
-        imuInputJetson.gyroZ = sensors.gyroVect.vi[2] * 0.01;
-        imuInputJetson.eulerX = sensors.eOrientation.vi[0] * sensors.Scale;
-        imuInputJetson.eulerY = sensors.eOrientation.vi[1] * sensors.Scale;
-        imuInputJetson.eulerZ = sensors.eOrientation.vi[2] * sensors.Scale;
-        imuInputJetson.quatX = sensors.qOrientation.vi[0] * sensors.Scale;
-        imuInputJetson.quatY = sensors.qOrientation.vi[1] * sensors.Scale;
-        imuInputJetson.quatZ = sensors.qOrientation.vi[2] * sensors.Scale;
-        imuInputJetson.quatW = sensors.qOrientation.vi[3] * sensors.Scale;
-        imuInputJetson.accX = sensors.accelVect.vi[0] * sensors.Scale;
-        imuInputJetson.accY = sensors.accelVect.vi[1] * sensors.Scale;
-        imuInputJetson.accZ = sensors.accelVect.vi[2] * sensors.Scale;
-        imuInputJetson.gravX = sensors.gravVect.vi[0] * 0.01;
-        imuInputJetson.gravY = sensors.gravVect.vi[1] * 0.01;
-        imuInputJetson.gravZ = sensors.gravVect.vi[2] * 0.01;
+        imuInputJetson.gyroVect = glm::vec3(sensors.gyroVect.vi[0] * 0.01, sensors.gyroVect.vi[1] * 0.01, sensors.gyroVect.vi[2] * 0.01);
+        imuInputJetson.eulerVect = glm::vec3(sensors.eOrientation.vi[0] * sensors.Scale, sensors.eOrientation.vi[1] * sensors.Scale, sensors.eOrientation.vi[2] * sensors.Scale);
+        imuInputJetson.rotQuat = glm::quat(sensors.qOrientation.vi[3] * sensors.Scale, sensors.qOrientation.vi[0] * sensors.Scale,
+                                            sensors.qOrientation.vi[1] * sensors.Scale, sensors.qOrientation.vi[2] * sensors.Scale);
+        
+        imuInputJetson.accVect = glm::vec3(sensors.accelVect.vi[0] * sensors.Scale, sensors.accelVect.vi[1] * sensors.Scale, sensors.accelVect.vi[2] * sensors.Scale);
+        imuInputJetson.gravVect = glm::vec3(sensors.gravVect.vi[0] * 0.01, sensors.gravVect.vi[1] * 0.01, sensors.gravVect.vi[2] * 0.01);
 
         imuDataJetsonBuffer.Queue(imuInputJetson);
         index++;
@@ -185,22 +166,22 @@ void IMUDataJetsonWrite()
             IMUTimeFile << tempIMU.time << std::endl;
 
             IMUDataFile << tempIMU.index << std::endl;
-            IMUDataFile << tempIMU.gyroX << std::endl;
-            IMUDataFile << tempIMU.gyroY << std::endl;
-            IMUDataFile << tempIMU.gyroZ << std::endl;
-            IMUDataFile << tempIMU.eulerX << std::endl;
-            IMUDataFile << tempIMU.eulerY << std::endl;
-            IMUDataFile << tempIMU.eulerZ << std::endl;
-            IMUDataFile << tempIMU.quatX << std::endl;
-            IMUDataFile << tempIMU.quatY << std::endl;
-            IMUDataFile << tempIMU.quatZ << std::endl;
-            IMUDataFile << tempIMU.quatW << std::endl;
-            IMUDataFile << tempIMU.accX << std::endl;
-            IMUDataFile << tempIMU.accY << std::endl;
-            IMUDataFile << tempIMU.accZ << std::endl;
-            IMUDataFile << tempIMU.gravX << std::endl;
-            IMUDataFile << tempIMU.gravY << std::endl;
-            IMUDataFile << tempIMU.gravZ << std::endl;
+            IMUDataFile << tempIMU.gyroVect.x << std::endl;
+            IMUDataFile << tempIMU.gyroVect.y << std::endl;
+            IMUDataFile << tempIMU.gyroVect.z << std::endl;
+            IMUDataFile << tempIMU.eulerVect.x << std::endl;
+            IMUDataFile << tempIMU.eulerVect.y << std::endl;
+            IMUDataFile << tempIMU.eulerVect.z << std::endl;
+            IMUDataFile << tempIMU.rotQuat.w << std::endl;
+            IMUDataFile << tempIMU.rotQuat.x << std::endl;
+            IMUDataFile << tempIMU.rotQuat.y << std::endl;
+            IMUDataFile << tempIMU.rotQuat.z << std::endl;
+            IMUDataFile << tempIMU.accVect.x << std::endl;
+            IMUDataFile << tempIMU.accVect.y << std::endl;
+            IMUDataFile << tempIMU.accVect.z << std::endl;
+            IMUDataFile << tempIMU.gravVect.x << std::endl;
+            IMUDataFile << tempIMU.gravVect.y << std::endl;
+            IMUDataFile << tempIMU.gravVect.z << std::endl;
         }
     }
 }
@@ -224,22 +205,22 @@ std::vector<ImuInputJetson> readDataIMUJetson()
             tempIMUInput.time = value;
 
             fileData >> tempIMUInput.index;
-            fileData >> tempIMUInput.gyroX;
-            fileData >> tempIMUInput.gyroY;
-            fileData >> tempIMUInput.gyroZ;
-            fileData >> tempIMUInput.eulerX;
-            fileData >> tempIMUInput.eulerY;
-            fileData >> tempIMUInput.eulerZ;
-            fileData >> tempIMUInput.quatX;
-            fileData >> tempIMUInput.quatY;
-            fileData >> tempIMUInput.quatZ;
-            fileData >> tempIMUInput.quatW;
-            fileData >> tempIMUInput.accX;
-            fileData >> tempIMUInput.accY;
-            fileData >> tempIMUInput.accZ;
-            fileData >> tempIMUInput.gravX;
-            fileData >> tempIMUInput.gravY;
-            fileData >> tempIMUInput.gravZ;
+            fileData >> tempIMUInput.gyroVect.x;
+            fileData >> tempIMUInput.gyroVect.y;
+            fileData >> tempIMUInput.gyroVect.z;
+            fileData >> tempIMUInput.eulerVect.x;
+            fileData >> tempIMUInput.eulerVect.y;
+            fileData >> tempIMUInput.eulerVect.z;
+            fileData >> tempIMUInput.rotQuat.w;
+            fileData >> tempIMUInput.rotQuat.x;
+            fileData >> tempIMUInput.rotQuat.y;
+            fileData >> tempIMUInput.rotQuat.z;
+            fileData >> tempIMUInput.accVect.x;
+            fileData >> tempIMUInput.accVect.y;
+            fileData >> tempIMUInput.accVect.z;
+            fileData >> tempIMUInput.gravVect.x;
+            fileData >> tempIMUInput.gravVect.y;
+            fileData >> tempIMUInput.gravVect.z;
 
             IMUData.push_back(tempIMUInput);
         }
@@ -435,24 +416,24 @@ int main()
                 waddstr(win, buff);
 
                 wmove(win, 5, 2);
-                snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroX, imuDataJetson.gyroY, imuDataJetson.gyroZ);
+                snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroVect.x, imuDataJetson.gyroVect.y, imuDataJetson.gyroVect.z);
                 waddstr(win, buff);
 
                 wmove(win, 7, 2);
-                snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerX, imuDataJetson.eulerY, imuDataJetson.eulerZ);
+                snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerVect.x, imuDataJetson.eulerVect.y, imuDataJetson.eulerVect.z);
                 waddstr(win, buff);
 
                 wmove(win, 9, 2);
-                snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuDataJetson.quatX,
-                         imuDataJetson.quatY, imuDataJetson.quatZ, imuDataJetson.quatW);
+                snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w, imuDataJetson.rotQuat.x,
+                     imuDataJetson.rotQuat.y, imuDataJetson.rotQuat.z);
                 waddstr(win, buff);
 
                 wmove(win, 11, 3);
-                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accX, imuDataJetson.accY, imuDataJetson.accZ);
+                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accVect.x, imuDataJetson.accVect.y, imuDataJetson.accVect.z);
                 waddstr(win, buff);
 
                 wmove(win, 13, 2);
-                snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravX, imuDataJetson.gravY, imuDataJetson.gravZ);
+                snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravVect.x, imuDataJetson.gravVect.y, imuDataJetson.gravVect.z);
                 waddstr(win, buff);
 
                 if (imuIndex != 0)

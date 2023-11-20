@@ -33,13 +33,6 @@ struct ImuInput
     int time;
     glm::vec3 acc;
     glm::quat rotQuat;
-    // float accX;
-    // float accY;
-    // float accZ;
-    //  float quatX;
-    //  float quatY;
-    //  float quatZ;
-    //  float quatW;
 };
 
 // Buffer to store camera structs.
@@ -375,7 +368,7 @@ int main()
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
-    std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+    /* std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
     std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
 
     std::cout << "Spline points: " << std::endl;
@@ -388,7 +381,7 @@ int main()
     for (size_t i = 0; i < slerpPoints.size(); i++)
     {
         std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
-    }
+    } */
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
