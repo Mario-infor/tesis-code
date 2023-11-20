@@ -58,6 +58,15 @@ bool stopProgram = false;
 bool doneCalibrating = false;
 bool generateNewData = false;
 
+cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+
+cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
+                0, 495.25862058, 166.53292108,
+                0, 0, 1);
+
+cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
+
+
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread()
 {
@@ -365,7 +374,8 @@ void testSlerpAndSpline(std::vector<ImuInput> imuReadVector, std::vector<CameraI
     }
 }
 
-FrameMarkersData getRotationTraslationFromFrame(cv::Mat cameraMatrix, cv::Mat distCoeffs, cv::Ptr<cv::aruco::Dictionary> dictionary, CameraInput frame)
+// Get rotation and translation from frame.
+FrameMarkersData getRotationTraslationFromFrame(CameraInput frame)
 {
     FrameMarkersData frameMarkersData;
 
@@ -387,10 +397,32 @@ FrameMarkersData getRotationTraslationFromFrame(cv::Mat cameraMatrix, cv::Mat di
     return frameMarkersData;
 }
 
+// Get rotation and translation from all frames.
+std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<FrameMarkersData> frameMarkersDataVector;
+
+    for (size_t i = 0; i < cameraReadVector.size(); i++)
+    {
+        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraReadVector[i]);
+        frameMarkersDataVector.push_back(frameMarkersData);
+    }
+
+    return frameMarkersDataVector;
+}
+
 // Interpolate camera rotation to fit IMU data.
 std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVector, std::vector<CameraInput> cameraReadVector)
 {
     std::vector<glm::quat> interpolatedPoints;
+    std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVector);
+
+    for (size_t i = 0; i < count; i++)
+    {
+        /* code */
+    }
+    
+
 
     return interpolatedPoints;
 }
@@ -414,16 +446,6 @@ int main()
 
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
-
-    cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
-
-    cv::Mat cameraMatrix, distCoeffs;
-
-    cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
-                    0, 495.25862058, 166.53292108,
-                    0, 0, 1);
-
-    distCoeffs = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
 
     WINDOW *win;
     char buff[512];
@@ -504,7 +526,7 @@ int main()
                 waddstr(win, buff);
             }
 
-            FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraMatrix, distCoeffs, dictionary, frame);
+            FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame);
 
             for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
             {

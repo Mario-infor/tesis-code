@@ -140,8 +140,8 @@ void imuThreadJetson()
         imuInputJetson.gyroVect = glm::vec3(sensors.gyroVect.vi[0] * 0.01, sensors.gyroVect.vi[1] * 0.01, sensors.gyroVect.vi[2] * 0.01);
         imuInputJetson.eulerVect = glm::vec3(sensors.eOrientation.vi[0] * sensors.Scale, sensors.eOrientation.vi[1] * sensors.Scale, sensors.eOrientation.vi[2] * sensors.Scale);
         imuInputJetson.rotQuat = glm::quat(sensors.qOrientation.vi[3] * sensors.Scale, sensors.qOrientation.vi[0] * sensors.Scale,
-                                            sensors.qOrientation.vi[1] * sensors.Scale, sensors.qOrientation.vi[2] * sensors.Scale);
-        
+                                           sensors.qOrientation.vi[1] * sensors.Scale, sensors.qOrientation.vi[2] * sensors.Scale);
+
         imuInputJetson.accVect = glm::vec3(sensors.accelVect.vi[0] * sensors.Scale, sensors.accelVect.vi[1] * sensors.Scale, sensors.accelVect.vi[2] * sensors.Scale);
         imuInputJetson.gravVect = glm::vec3(sensors.gravVect.vi[0] * 0.01, sensors.gravVect.vi[1] * 0.01, sensors.gravVect.vi[2] * 0.01);
 
@@ -336,6 +336,29 @@ std::vector<glm::quat> createSlerpPoint(std::vector<ImuInputJetson> imuReadVecto
     return points;
 }
 
+// Get rotation and translation from frame.
+FrameMarkersData getRotationTraslationFromFrame(cv::Mat cameraMatrix, cv::Mat distCoeffs, cv::Ptr<cv::aruco::Dictionary> dictionary, CameraInput frame)
+{
+    FrameMarkersData frameMarkersData;
+
+    std::vector<int> markerIds;
+    std::vector<std::vector<cv::Point2f>> markerCorners;
+
+    cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
+
+    if (markerIds.size() > 0)
+    {
+        cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+
+        std::vector<cv::Vec3d> rvecs, tvecs;
+        cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+        frameMarkersData.rvecs = rvecs;
+        frameMarkersData.tvecs = tvecs;
+    }
+
+    return frameMarkersData;
+}
+
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
@@ -425,7 +448,7 @@ int main()
 
                 wmove(win, 9, 2);
                 snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w, imuDataJetson.rotQuat.x,
-                     imuDataJetson.rotQuat.y, imuDataJetson.rotQuat.z);
+                         imuDataJetson.rotQuat.y, imuDataJetson.rotQuat.z);
                 waddstr(win, buff);
 
                 wmove(win, 11, 3);
@@ -475,22 +498,11 @@ int main()
                     waddstr(win, buff);
                 }
 
-                std::vector<int> markerIds;
-                std::vector<std::vector<cv::Point2f>> markerCorners;
+                FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraMatrix, distCoeffs, dictionary, frame);
 
-                cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
-
-                if (markerIds.size() > 0)
+                for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
                 {
-                    cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
-
-                    std::vector<cv::Vec3d> rvecs, tvecs;
-                    cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
-
-                    for (int i = 0; i < (int)rvecs.size(); i++)
-                    {
-                        cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
-                    }
+                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
                 }
 
                 cv::imshow("draw axis", frame.frame);
