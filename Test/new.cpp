@@ -417,13 +417,6 @@ std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVe
     std::vector<glm::quat> interpolatedPoints;
     std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVector);
 
-    for (size_t i = 0; i < count; i++)
-    {
-        /* code */
-    }
-    
-
-
     return interpolatedPoints;
 }
 

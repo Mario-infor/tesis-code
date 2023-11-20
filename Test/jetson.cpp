@@ -2,7 +2,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <BNO055-BBB_driver.h>
+//#include <BNO055-BBB_driver.h>
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -38,6 +38,13 @@ struct ImuInputJetson
     glm::vec3 gravVect;
 };
 
+// Struct to store a list of rvects and tvects.
+struct FrameMarkersData
+{
+    std::vector<cv::Vec3d> rvecs;
+    std::vector<cv::Vec3d> tvecs;
+};
+
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTHCAMERA);
 
@@ -56,8 +63,15 @@ bool doneCalibrating = false;
 bool generateNewData = true;
 bool preccessData = false;
 
-// Pipeline for camera on JEtson Board.
+cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
+cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
+                        0, 495.25862058, 166.53292108,
+                        0, 0, 1);
+
+cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
+
+// Pipeline for camera on JEtson Board.
 std::string get_tegra_pipeline(int width, int height, int fps)
 {
     return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
@@ -288,24 +302,19 @@ std::vector<CameraInput> readDataCamera()
     return cameraData;
 }
 
-// Create spline points (tests at home).
+// Create spline points.
 std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector)
 {
     std::vector<glm::vec3> points;
 
     for (size_t i = 0; i < imuReadVector.size() - 4; i++)
     {
-        std::vector<glm::vec3> controlPoints = {
-            glm::vec3(imuReadVector[i].accX, imuReadVector[i].accY, imuReadVector[i].accZ),
-            glm::vec3(imuReadVector[i + 1].accX, imuReadVector[i + 1].accY, imuReadVector[i + 1].accZ),
-            glm::vec3(imuReadVector[i + 2].accX, imuReadVector[i + 2].accY, imuReadVector[i + 2].accZ),
-            glm::vec3(imuReadVector[i + 3].accX, imuReadVector[i + 3].accY, imuReadVector[i + 3].accZ),
-        };
-
         // Create a for loop for t values from 0 to 1 with a step of 0.1.
         for (float t = 0; t < 1; t += 0.1)
         {
-            glm::vec3 tempPoint = glm::catmullRom(controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3], t);
+            glm::vec3 tempPoint = glm::catmullRom(imuReadVector[i].accVect, imuReadVector[i + 1].accVect,
+                                                  imuReadVector[i + 2].accVect, imuReadVector[i + 3].accVect, t);
+
             points.push_back(tempPoint);
         }
     }
@@ -320,15 +329,10 @@ std::vector<glm::quat> createSlerpPoint(std::vector<ImuInputJetson> imuReadVecto
 
     for (size_t i = 0; i < imuReadVector.size() - 1; i++)
     {
-        std::vector<glm::quat> controlPoints = {
-            glm::quat(imuReadVector[i].quatW, imuReadVector[i].quatX, imuReadVector[i].quatY, imuReadVector[i].quatZ),
-            glm::quat(imuReadVector[i + 1].quatW, imuReadVector[i + 1].quatX, imuReadVector[i + 1].quatY, imuReadVector[i + 1].quatZ),
-        };
-
         // Create a for loop for t values from 0 to 1 with a step of 0.1.
         for (float t = 0; t < 1; t += 0.1)
         {
-            glm::quat tempPoint = glm::slerp(controlPoints[0], controlPoints[1], t);
+            glm::quat tempPoint = glm::slerp(imuReadVector.at(i).rotQuat, imuReadVector.at(i + 1).rotQuat, t);
             points.push_back(tempPoint);
         }
     }
@@ -336,8 +340,27 @@ std::vector<glm::quat> createSlerpPoint(std::vector<ImuInputJetson> imuReadVecto
     return points;
 }
 
+// Tests Slerp and Spline methods.
+void testSlerpAndSpline(std::vector<ImuInputJetson> imuReadVector, std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+    std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
+
+    std::cout << "Spline points: " << std::endl;
+    for (size_t i = 0; i < splinePoints.size(); i++)
+    {
+        std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
+    }
+
+    std::cout << "Slerp points: " << std::endl;
+    for (size_t i = 0; i < slerpPoints.size(); i++)
+    {
+        std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
+    }
+}
+
 // Get rotation and translation from frame.
-FrameMarkersData getRotationTraslationFromFrame(cv::Mat cameraMatrix, cv::Mat distCoeffs, cv::Ptr<cv::aruco::Dictionary> dictionary, CameraInput frame)
+FrameMarkersData getRotationTraslationFromFrame(CameraInput frame)
 {
     FrameMarkersData frameMarkersData;
 
@@ -358,6 +381,21 @@ FrameMarkersData getRotationTraslationFromFrame(cv::Mat cameraMatrix, cv::Mat di
 
     return frameMarkersData;
 }
+
+// Get rotation and translation from all frames.
+std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<FrameMarkersData> frameMarkersDataVector;
+
+    for (size_t i = 0; i < cameraReadVector.size(); i++)
+    {
+        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraReadVector[i]);
+        frameMarkersDataVector.push_back(frameMarkersData);
+    }
+
+    return frameMarkersDataVector;
+}
+
 
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
@@ -381,7 +419,7 @@ int main()
         std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
         std::vector<CameraInput> cameraReadVector = readDataCamera();
 
-        /*std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+        std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
         std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
 
         std::cout << "Spline points: " << std::endl;
@@ -394,18 +432,7 @@ int main()
         for (size_t i = 0; i < slerpPoints.size(); i++)
         {
             std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
-        }*/
-
-        cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
-
-        cv::Mat cameraMatrix, distCoeffs;
-
-        cameraMatrix = (cv::Mat_<double>(3, 3) << 1.4149463861018060e+03, 0.0, 9.6976370017096372e+02,
-                        0.0, 1.4149463861018060e+03, 5.3821002771506880e+02,
-                        0.0, 0.0, 1.0);
-
-        distCoeffs = (cv::Mat_<double>(1, 5) << 1.8580734579482813e-01, -5.5388292695096419e-01, 1.9639104707396063e-03,
-                      4.5272274621161552e-03, 5.3671862979121965e-01);
+        }
 
         WINDOW *win;
         char buff[512];
@@ -498,7 +525,7 @@ int main()
                     waddstr(win, buff);
                 }
 
-                FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraMatrix, distCoeffs, dictionary, frame);
+                FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame);
 
                 for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
                 {
