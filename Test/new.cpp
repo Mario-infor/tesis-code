@@ -35,6 +35,13 @@ struct ImuInput
     glm::quat rotQuat;
 };
 
+// Struct to store a list of rvects and tvects.
+struct FrameMarkersData
+{
+    std::vector<cv::Vec3d> rvecs;
+    std::vector<cv::Vec3d> tvecs;
+};
+
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTHCAMERA);
 
@@ -340,6 +347,46 @@ std::vector<glm::quat> createSlerpPoint(std::vector<ImuInput> imuReadVector)
     return points;
 }
 
+void testSlerpAndSpline(std::vector<ImuInput> imuReadVector, std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+    std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
+
+    std::cout << "Spline points: " << std::endl;
+    for (size_t i = 0; i < splinePoints.size(); i++)
+    {
+        std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
+    }
+
+    std::cout << "Slerp points: " << std::endl;
+    for (size_t i = 0; i < slerpPoints.size(); i++)
+    {
+        std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
+    }
+}
+
+FrameMarkersData getRotationTraslationFromFrame(cv::Mat cameraMatrix, cv::Mat distCoeffs, cv::Ptr<cv::aruco::Dictionary> dictionary, CameraInput frame)
+{
+    FrameMarkersData frameMarkersData;
+
+    std::vector<int> markerIds;
+    std::vector<std::vector<cv::Point2f>> markerCorners;
+
+    cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
+
+    if (markerIds.size() > 0)
+    {
+        cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+
+        std::vector<cv::Vec3d> rvecs, tvecs;
+        cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+        frameMarkersData.rvecs = rvecs;
+        frameMarkersData.tvecs = tvecs;
+    }
+
+    return frameMarkersData;
+}
+
 // Interpolate camera rotation to fit IMU data.
 std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVector, std::vector<CameraInput> cameraReadVector)
 {
@@ -367,21 +414,6 @@ int main()
 
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
-
-    /* std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
-    std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
-
-    std::cout << "Spline points: " << std::endl;
-    for (size_t i = 0; i < splinePoints.size(); i++)
-    {
-        std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
-    }
-
-    std::cout << "Slerp points: " << std::endl;
-    for (size_t i = 0; i < slerpPoints.size(); i++)
-    {
-        std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
-    } */
 
     cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
@@ -472,22 +504,11 @@ int main()
                 waddstr(win, buff);
             }
 
-            std::vector<int> markerIds;
-            std::vector<std::vector<cv::Point2f>> markerCorners;
+            FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraMatrix, distCoeffs, dictionary, frame);
 
-            cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
-
-            if (markerIds.size() > 0)
+            for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
             {
-                cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
-
-                std::vector<cv::Vec3d> rvecs, tvecs;
-                cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
-
-                for (int i = 0; i < (int)rvecs.size(); i++)
-                {
-                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
-                }
+                cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
             }
 
             cv::imshow("draw axis", frame.frame);

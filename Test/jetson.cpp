@@ -2,7 +2,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-//#include <BNO055-BBB_driver.h>
+#include <BNO055-BBB_driver.h>
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -289,7 +289,7 @@ std::vector<CameraInput> readDataCamera()
 }
 
 // Create spline points (tests at home).
-/*std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector)
+std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector)
 {
     std::vector<glm::vec3> points;
 
@@ -311,10 +311,10 @@ std::vector<CameraInput> readDataCamera()
     }
 
     return points;
-}*/
+}
 
 // Create slerp points for quaternions (tests at home).
-/*std::vector<glm::quat> createSlerpPoint(std::vector<ImuInputJetson> imuReadVector)
+std::vector<glm::quat> createSlerpPoint(std::vector<ImuInputJetson> imuReadVector)
 {
     std::vector<glm::quat> points;
 
@@ -334,7 +334,7 @@ std::vector<CameraInput> readDataCamera()
     }
 
     return points;
-}*/
+}
 
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
