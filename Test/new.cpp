@@ -31,13 +31,15 @@ struct ImuInput
 {
     int index;
     int time;
-    float accX;
-    float accY;
-    float accZ;
-    float quatX;
-    float quatY;
-    float quatZ;
-    float quatW;
+    glm::vec3 acc;
+    glm::quat rotQuat;
+    // float accX;
+    // float accY;
+    // float accZ;
+    //  float quatX;
+    //  float quatY;
+    //  float quatZ;
+    //  float quatW;
 };
 
 // Buffer to store camera structs.
@@ -166,26 +168,16 @@ void imuThread()
                 if (parsedData.size() == 7)
                 {
                     imuInput.index = index;
-                    imuInput.accX = parsedData[0];
-                    imuInput.accY = parsedData[1];
-                    imuInput.accZ = parsedData[2];
-                    imuInput.quatW = parsedData[3];
-                    imuInput.quatX = parsedData[4];
-                    imuInput.quatY = parsedData[5];
-                    imuInput.quatZ = parsedData[6];
+                    imuInput.acc = glm::vec3(parsedData[0], parsedData[1], parsedData[2]);
+                    imuInput.rotQuat = glm::quat(parsedData[3], parsedData[4], parsedData[5], parsedData[6]);
 
                     doneCalibrating = true;
                 }
                 else
                 {
                     imuInput.index = index;
-                    imuInput.accX = 0;
-                    imuInput.accY = 0;
-                    imuInput.accZ = 0;
-                    imuInput.quatW = 0;
-                    imuInput.quatX = 0;
-                    imuInput.quatY = 0;
-                    imuInput.quatZ = 0;
+                    imuInput.acc = glm::vec3(0, 0, 0);
+                    imuInput.rotQuat = glm::quat(1, 0, 0, 0);
                 }
                 index++;
                 imuDataBuffer.Queue(imuInput);
@@ -215,13 +207,13 @@ void IMUDataWrite()
 
             IMUTimeFile << tempIMU.time << std::endl;
             IMUDataFile << tempIMU.index << std::endl;
-            IMUDataFile << tempIMU.accX << std::endl;
-            IMUDataFile << tempIMU.accY << std::endl;
-            IMUDataFile << tempIMU.accZ << std::endl;
-            IMUDataFile << tempIMU.quatW << std::endl;
-            IMUDataFile << tempIMU.quatX << std::endl;
-            IMUDataFile << tempIMU.quatY << std::endl;
-            IMUDataFile << tempIMU.quatZ << std::endl;
+            IMUDataFile << tempIMU.acc.x << std::endl;
+            IMUDataFile << tempIMU.acc.y << std::endl;
+            IMUDataFile << tempIMU.acc.z << std::endl;
+            IMUDataFile << tempIMU.rotQuat.w << std::endl;
+            IMUDataFile << tempIMU.rotQuat.x << std::endl;
+            IMUDataFile << tempIMU.rotQuat.y << std::endl;
+            IMUDataFile << tempIMU.rotQuat.z << std::endl;
         }
     }
 }
@@ -244,13 +236,13 @@ std::vector<ImuInput> readDataIMU()
 
             tempIMUInput.time = value;
             fileData >> tempIMUInput.index;
-            fileData >> tempIMUInput.accX;
-            fileData >> tempIMUInput.accY;
-            fileData >> tempIMUInput.accZ;
-            fileData >> tempIMUInput.quatW;
-            fileData >> tempIMUInput.quatX;
-            fileData >> tempIMUInput.quatY;
-            fileData >> tempIMUInput.quatZ;
+            fileData >> tempIMUInput.acc.x;
+            fileData >> tempIMUInput.acc.y;
+            fileData >> tempIMUInput.acc.z;
+            fileData >> tempIMUInput.rotQuat.w;
+            fileData >> tempIMUInput.rotQuat.x;
+            fileData >> tempIMUInput.rotQuat.y;
+            fileData >> tempIMUInput.rotQuat.z;
 
             IMUData.push_back(tempIMUInput);
         }
@@ -324,17 +316,12 @@ std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
 
     for (size_t i = 0; i < imuReadVector.size() - 4; i++)
     {
-        std::vector<glm::vec3> controlPoints = {
-            glm::vec3(imuReadVector[i].accX, imuReadVector[i].accY, imuReadVector[i].accZ),
-            glm::vec3(imuReadVector[i + 1].accX, imuReadVector[i + 1].accY, imuReadVector[i + 1].accZ),
-            glm::vec3(imuReadVector[i + 2].accX, imuReadVector[i + 2].accY, imuReadVector[i + 2].accZ),
-            glm::vec3(imuReadVector[i + 3].accX, imuReadVector[i + 3].accY, imuReadVector[i + 3].accZ),
-        };
-
         // Create a for loop for t values from 0 to 1 with a step of 0.1.
         for (float t = 0; t < 1; t += 0.1)
         {
-            glm::vec3 tempPoint = glm::catmullRom(controlPoints[0], controlPoints[1], controlPoints[2], controlPoints[3], t);
+            glm::vec3 tempPoint = glm::catmullRom(imuReadVector[i].acc, imuReadVector[i + 1].acc,
+                                                  imuReadVector[i + 2].acc, imuReadVector[i + 3].acc, t);
+
             points.push_back(tempPoint);
         }
     }
@@ -349,20 +336,23 @@ std::vector<glm::quat> createSlerpPoint(std::vector<ImuInput> imuReadVector)
 
     for (size_t i = 0; i < imuReadVector.size() - 1; i++)
     {
-        std::vector<glm::quat> controlPoints = {
-            glm::quat(imuReadVector[i].quatW, imuReadVector[i].quatX, imuReadVector[i].quatY, imuReadVector[i].quatZ),
-            glm::quat(imuReadVector[i + 1].quatW, imuReadVector[i + 1].quatX, imuReadVector[i + 1].quatY, imuReadVector[i + 1].quatZ),
-        };
-
         // Create a for loop for t values from 0 to 1 with a step of 0.1.
         for (float t = 0; t < 1; t += 0.1)
         {
-            glm::quat tempPoint = glm::slerp(controlPoints[0], controlPoints[1], t);
+            glm::quat tempPoint = glm::slerp(imuReadVector.at(i).rotQuat, imuReadVector.at(i + 1).rotQuat, t);
             points.push_back(tempPoint);
         }
     }
 
     return points;
+}
+
+// Interpolate camera rotation to fit IMU data.
+std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVector, std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<glm::quat> interpolatedPoints;
+
+    return interpolatedPoints;
 }
 
 // Main method that creates threads, writes and read data from files and displays data on console.
@@ -442,11 +432,12 @@ int main()
             waddstr(win, buff);
 
             wmove(win, 5, 3);
-            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.accX, imuData.accY, imuData.accZ);
+            snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.acc.x, imuData.acc.y, imuData.acc.z);
             waddstr(win, buff);
 
             wmove(win, 7, 2);
-            snprintf(buff, 511, "Quat = {X=%06.2f, Y=%06.2f, Z=%06.2f, W=%06.2f}", imuData.quatX, imuData.quatY, imuData.quatZ, imuData.quatW);
+            snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuData.rotQuat.w, imuData.rotQuat.x,
+                     imuData.rotQuat.y, imuData.rotQuat.z);
             waddstr(win, buff);
 
             if (imuIndex != 0)
