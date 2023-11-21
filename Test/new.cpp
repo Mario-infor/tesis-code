@@ -43,6 +43,12 @@ struct FrameMarkersData
     std::vector<cv::Vec3d> tvecs;
 };
 
+struct CameraInterpolatedData
+{
+    CameraInput frame;
+    FrameMarkersData frameMarkersData;
+};
+
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTHCAMERA);
 
@@ -412,19 +418,13 @@ std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(std::vector<Cam
 }
 
 // Interpolate camera rotation to fit IMU data.
-std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVector, std::vector<CameraInput> cameraReadVector)
+std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<ImuInput> imuReadVector, const std::vector<CameraInput> cameraReadVector)
 {
-    std::vector<glm::quat> interpolatedPoints;
+    std::vector<CameraInterpolatedData> interpolatedPoints;
     std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVector);
 
     int indexCamera = 0;
     int indexIMU = 0;
-
-    cv::Vec3d rotVect0 = frameMarkersDataVector[indexCamera].rvecs[0];
-    cv::Vec3d rotVect1 = frameMarkersDataVector[indexCamera + 1].rvecs[0];
-
-    glm::quat point0 = glm::quat(glm::vec3(rotVect0[0], rotVect0[1], rotVect0[2]));
-    glm::quat point1 = glm::quat(glm::vec3(rotVect1[0], rotVect1[1], rotVect1[2]));
 
     while (indexCamera != (int)(cameraReadVector.size() - 1))
     {
@@ -432,12 +432,52 @@ std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVe
         {
             if (imuReadVector[i].time > cameraReadVector[indexCamera].time && imuReadVector[i].time < cameraReadVector[indexCamera + 1].time)
             {
-                float relativePos = (float)(imuReadVector[i].time - cameraReadVector[indexCamera].time) /
-                                    (float)(cameraReadVector[indexCamera + 1].time - cameraReadVector[indexCamera].time);
+                CameraInterpolatedData tempCameraInterpolatedData;
+                CameraInput tempCameraInput;
+                FrameMarkersData tempFrameMarkersData;
 
-                glm::quat interpolatedPoint = glm::slerp(point0, point1, relativePos);
-                interpolatedPoints.push_back(interpolatedPoint);
-                
+                tempCameraInput.index = -1;
+                tempCameraInput.time = imuReadVector[i].time;
+                tempCameraInput.frame = cameraReadVector[indexCamera].frame;
+
+                for (size_t j = 0; j < frameMarkersDataVector[indexCamera].rvecs.size(); j++)
+                {
+
+                    cv::Vec3d rotVect0 = frameMarkersDataVector[indexCamera].rvecs[j];
+                    cv::Vec3d rotVect1 = frameMarkersDataVector[indexCamera + 1].rvecs[j];
+
+                    glm::vec3 eulerAngles0(rotVect0[0] / (2 * M_PI), rotVect0[1] / (2 * M_PI), rotVect0[2] / (2 * M_PI));
+                    glm::vec3 eulerAngles1(rotVect1[0] / (2 * M_PI), rotVect1[1] / (2 * M_PI), rotVect1[2] / (2 * M_PI));
+
+                    glm::quat quaternion0 = glm::quat(eulerAngles0);
+                    glm::quat quaternion1 = glm::quat(eulerAngles1);
+
+                    /*
+                    glm::quat point0 = glm::quat(glm::vec3(rotVect0[0], rotVect0[1], rotVect0[2]));
+                    glm::quat point1 = glm::quat(glm::vec3(rotVect1[0], rotVect1[1], rotVect1[2])); */
+
+                    float relativePos = (float)(imuReadVector[i].time - cameraReadVector[indexCamera].time) /
+                                        (float)(cameraReadVector[indexCamera + 1].time - cameraReadVector[indexCamera].time);
+
+                    glm::quat interpolatedPoint = glm::slerp(quaternion0, quaternion1, relativePos);
+
+                    // interpolatedPoint = glm::normalize(interpolatedPoint);
+                    // glm::vec3 rotationVector = glm::axis(interpolatedPoint);
+
+                    glm::vec3 rotacionVec3 = glm::eulerAngles(interpolatedPoint);
+
+                    tempFrameMarkersData.rvecs.push_back(cv::Vec3d(
+                        rotacionVec3.x * (2 * M_PI),
+                        rotacionVec3.y * (2 * M_PI),
+                        rotacionVec3.z * (2 * M_PI)));
+                        
+                    tempFrameMarkersData.tvecs.push_back(frameMarkersDataVector[indexCamera].tvecs[j]);
+                }
+
+                tempCameraInterpolatedData.frame = tempCameraInput;
+                tempCameraInterpolatedData.frameMarkersData = tempFrameMarkersData;
+
+                interpolatedPoints.push_back(tempCameraInterpolatedData);
 
                 indexIMU = i + 1;
             }
@@ -448,6 +488,24 @@ std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVe
     }
 
     return interpolatedPoints;
+}
+
+// Test interpolate camera rotation to fit IMU data.
+void testInterpolateCamera(std::vector<CameraInterpolatedData> interpolatedPoints)
+{
+    for (int i = 0; i < (int)interpolatedPoints.size(); i++)
+    {
+        for (size_t j = 0; j < interpolatedPoints[i].frameMarkersData.rvecs.size(); j++)
+        {
+            cv::aruco::drawAxis(interpolatedPoints[i].frame.frame, cameraMatrix, distCoeffs, interpolatedPoints[i].frameMarkersData.rvecs[j],
+                                interpolatedPoints[i].frameMarkersData.tvecs[j], 0.1);
+        }
+
+        cv::imshow("Test", interpolatedPoints[i].frame.frame);
+
+        cv::waitKey(1);
+    }
+    cv::destroyAllWindows();
 }
 
 // Main method that creates threads, writes and read data from files and displays data on console.
@@ -470,7 +528,12 @@ int main()
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
-    std::vector<glm::quat> interpolatedRotation = interpolateCameraRotation(imuReadVector, cameraReadVector);
+/*     std::vector<ImuInput> imuReadVectorCopy = imuReadVector;
+    std::vector<CameraInput> cameraReadVectorCopy = cameraReadVector;
+
+    std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy);
+
+    testInterpolateCamera(interpolatedRotation);  */
 
     WINDOW *win;
     char buff[512];
@@ -561,7 +624,7 @@ int main()
             cv::imshow("draw axis", frame.frame);
         }
 
-        cv::waitKey(33);
+        cv::waitKey(1);
 
         wrefresh(win);
         wclear(win);
