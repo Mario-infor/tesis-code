@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
+#include <opencv2/calib3d.hpp>
 #include <iostream>
 //#include <BNO055-BBB_driver.h>
 #include <chrono>
@@ -94,13 +95,13 @@ void cameraCaptureThread()
     else
     {
         int index = 0;
-        timeCameraStart = std::chrono::steady_clock::now();
 
         while (index < RINGBUFFERLENGTHCAMERA)
         {
             std::cout << "Camera: " << index << std::endl;
             if (doneCalibrating)
             {
+                timeCameraStart = std::chrono::steady_clock::now();
                 cv::Mat frame, grayscale;
                 cap.read(frame);
 

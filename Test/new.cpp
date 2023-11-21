@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
+#include <opencv2/calib3d.hpp>
 #include <iostream>
 #include <boost/asio.hpp>
 #include <chrono>
@@ -61,11 +62,10 @@ bool generateNewData = false;
 cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
 cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
-                0, 495.25862058, 166.53292108,
-                0, 0, 1);
+                        0, 495.25862058, 166.53292108,
+                        0, 0, 1);
 
 cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
-
 
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread()
@@ -77,13 +77,13 @@ void cameraCaptureThread()
     else
     {
         int index = 0;
-        timeCameraStart = std::chrono::steady_clock::now();
 
         while (index < RINGBUFFERLENGTHCAMERA)
         {
             std::cout << "Camera: " << index << std::endl;
             if (doneCalibrating)
             {
+                timeCameraStart = std::chrono::steady_clock::now();
                 cv::Mat frame, grayscale;
                 cap.read(frame);
 
@@ -417,6 +417,36 @@ std::vector<glm::quat> interpolateCameraRotation(std::vector<ImuInput> imuReadVe
     std::vector<glm::quat> interpolatedPoints;
     std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVector);
 
+    int indexCamera = 0;
+    int indexIMU = 0;
+
+    cv::Vec3d rotVect0 = frameMarkersDataVector[indexCamera].rvecs[0];
+    cv::Vec3d rotVect1 = frameMarkersDataVector[indexCamera + 1].rvecs[0];
+
+    glm::quat point0 = glm::quat(glm::vec3(rotVect0[0], rotVect0[1], rotVect0[2]));
+    glm::quat point1 = glm::quat(glm::vec3(rotVect1[0], rotVect1[1], rotVect1[2]));
+
+    while (indexCamera != (int)(cameraReadVector.size() - 1))
+    {
+        for (size_t i = indexIMU; i < imuReadVector.size(); i++)
+        {
+            if (imuReadVector[i].time > cameraReadVector[indexCamera].time && imuReadVector[i].time < cameraReadVector[indexCamera + 1].time)
+            {
+                float relativePos = (float)(imuReadVector[i].time - cameraReadVector[indexCamera].time) /
+                                    (float)(cameraReadVector[indexCamera + 1].time - cameraReadVector[indexCamera].time);
+
+                glm::quat interpolatedPoint = glm::slerp(point0, point1, relativePos);
+                interpolatedPoints.push_back(interpolatedPoint);
+                
+
+                indexIMU = i + 1;
+            }
+            else if (imuReadVector[i].time > cameraReadVector[indexCamera + 1].time)
+                break;
+        }
+        indexCamera++;
+    }
+
     return interpolatedPoints;
 }
 
@@ -439,6 +469,8 @@ int main()
 
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
+
+    std::vector<glm::quat> interpolatedRotation = interpolateCameraRotation(imuReadVector, cameraReadVector);
 
     WINDOW *win;
     char buff[512];
