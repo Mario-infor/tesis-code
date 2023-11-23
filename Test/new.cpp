@@ -367,6 +367,21 @@ std::vector<CameraInput> readDataCamera()
     return cameraData;
 }
 
+// Write camera rotations after slerp and store on .csv file.
+void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector)
+{
+    std::ofstream cameraRotationsFile(dirRotationsFolder + "slerpRotations.csv", std::ios::out);
+
+    if (cameraRotationsFile.is_open())
+    {
+       for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
+       {
+            cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[0];
+            cameraRotationsFile << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+       }
+    }
+}
+
 // Create spline points (tests at home).
 std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
 {
@@ -538,8 +553,13 @@ void testInterpolateCamera(std::vector<CameraInterpolatedData> interpolatedPoint
     {
         for (size_t j = 0; j < interpolatedPoints[i].frameMarkersData.rvecs.size(); j++)
         {
-            cv::aruco::drawAxis(interpolatedPoints[i].frame.frame, cameraMatrix, distCoeffs, interpolatedPoints[i].frameMarkersData.rvecs[j],
+            if (!std::isnan(interpolatedPoints[i].frameMarkersData.rvecs[j][0]))
+            {
+                std::cout << "Rvec: " << interpolatedPoints[i].frameMarkersData.rvecs[j] << std::endl;
+
+                cv::aruco::drawAxis(interpolatedPoints[i].frame.frame, cameraMatrix, distCoeffs, interpolatedPoints[i].frameMarkersData.rvecs[j],
                                 interpolatedPoints[i].frameMarkersData.tvecs[j], 0.1);
+            }
         }
 
         cv::imshow("Test", interpolatedPoints[i].frame.frame);
@@ -590,6 +610,8 @@ int main()
     std::vector<CameraInput> cameraReadVectorCopy = hardCopyCameraVector(cameraReadVector);
 
     std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy);
+
+    cameraRotationSlerpDataWrite(interpolatedRotation);
 
     testInterpolateCamera(interpolatedRotation);
 
