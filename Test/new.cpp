@@ -25,13 +25,15 @@ struct CameraInput
     int index;
     int time;
     cv::Mat frame;
+
     CameraInput &operator=(const CameraInput &other)
     {
-        if (this == &other)
-            return *this;
-        index = other.index;
-        time = other.time;
-        frame = other.frame.clone();
+        if (this != &other)
+        {
+            index = other.index;
+            time = other.time;
+            frame = other.frame.clone();
+        }
         return *this;
     }
 };
@@ -70,6 +72,7 @@ std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
 std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 std::string dirCameraFolder = "./Data/Camera/";
 std::string dirIMUFolder = "./Data/IMU/";
+std::string dirRotationsFolder = "./Data/Rotations/";
 bool stopProgram = false;
 bool doneCalibrating = false;
 bool generateNewData = false;
@@ -88,7 +91,7 @@ void cameraCaptureThread()
     cv::VideoCapture cap(0);
 
     if (!cap.isOpened())
-        std::cerr << "Error al abrir la cámara." << std::endl;
+        std::cerr << "Error opening the camera." << std::endl;
     else
     {
         int index = 0;
@@ -214,6 +217,37 @@ void imuThread()
     }
 
     serial.close();
+}
+
+// Convert rotation vector to quaternion.
+glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
+{
+    float vecNorm = cv::norm(rotVect);
+    float w = cos(vecNorm / 2);
+    cv::Vec3d xyz = sin(vecNorm / 2) * rotVect / vecNorm;
+
+    glm::quat quaternion = glm::quat(w, xyz[0], xyz[1], xyz[2]);
+
+    return quaternion;
+}
+
+// Convert quaternion to rotation vector.
+cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion)
+{
+    cv::Vec3d rotVect;
+
+    float w = quaternion.w;
+    float x = quaternion.x;
+    float y = quaternion.y;
+    float z = quaternion.z;
+
+    float vecNorm = acos(w * 2);
+
+    rotVect[0] = x * vecNorm / sin(vecNorm / 2);
+    rotVect[1] = y * vecNorm / sin(vecNorm / 2);
+    rotVect[2] = z * vecNorm / sin(vecNorm / 2);
+
+    return rotVect;
 }
 
 // Write data from IMU to files (tests at home).
@@ -454,22 +488,29 @@ std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<
                     cv::Vec3d rotVect0 = frameMarkersDataVector[indexCamera].rvecs[j];
                     cv::Vec3d rotVect1 = frameMarkersDataVector[indexCamera + 1].rvecs[j];
 
-                    glm::vec3 eulerAngles0(rotVect0[0] * 180 / M_PI, rotVect0[1] * 180 / M_PI, rotVect0[2] * 180 / M_PI);
+                    /* glm::vec3 eulerAngles0(rotVect0[0] * 180 / M_PI, rotVect0[1] * 180 / M_PI, rotVect0[2] * 180 / M_PI);
                     glm::vec3 eulerAngles1(rotVect1[0] * 180 / M_PI, rotVect1[1] * 180 / M_PI, rotVect1[2] * 180 / M_PI);
 
                     glm::quat quaternion0 = glm::quat(eulerAngles0);
-                    glm::quat quaternion1 = glm::quat(eulerAngles1);
+                    glm::quat quaternion1 = glm::quat(eulerAngles1); */
+
+                    glm::quat quaternion0 = convertOpencvRotVectToQuat(rotVect0);
+                    glm::quat quaternion1 = convertOpencvRotVectToQuat(rotVect1);
 
                     float relativePos = (float)(imuReadVectorCopy[i].time - cameraReadVectorCopy[indexCamera].time) /
                                         (float)(cameraReadVectorCopy[indexCamera + 1].time - cameraReadVectorCopy[indexCamera].time);
 
                     glm::quat interpolatedPoint = glm::slerp(quaternion0, quaternion1, relativePos);
-                    glm::vec3 rotacionVec3 = glm::eulerAngles(interpolatedPoint);
 
-                    tempFrameMarkersData.rvecs.push_back(cv::Vec3d(
+                    // glm::vec3 rotacionVec3 = glm::eulerAngles(interpolatedPoint);
+                    cv::Vec3d rotacionVec3 = convertQuatToOpencvRotVect(interpolatedPoint);
+
+                    tempFrameMarkersData.rvecs.push_back(rotacionVec3);
+
+                    /* tempFrameMarkersData.rvecs.push_back(cv::Vec3d(
                         rotacionVec3.x * M_PI / 180,
                         rotacionVec3.y * M_PI / 180,
-                        rotacionVec3.z * M_PI / 180));
+                        rotacionVec3.z * M_PI / 180)); */
 
                     tempFrameMarkersData.tvecs.push_back(frameMarkersDataVector[indexCamera].tvecs[j]);
                 }
@@ -503,9 +544,26 @@ void testInterpolateCamera(std::vector<CameraInterpolatedData> interpolatedPoint
 
         cv::imshow("Test", interpolatedPoints[i].frame.frame);
 
-        cv::waitKey(2);
+        cv::waitKey(1);
     }
     cv::destroyAllWindows();
+}
+
+// Create a hard copy of camera vector.
+std::vector<CameraInput> hardCopyCameraVector(std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<CameraInput> cameraReadVectorCopy;
+
+    std::vector<CameraInput>::iterator it = cameraReadVector.begin();
+    CameraInput tempCamera;
+
+    for (; it != cameraReadVector.end(); it++)
+    {
+        tempCamera = *it;
+        cameraReadVectorCopy.push_back(tempCamera);
+    }
+
+    return cameraReadVectorCopy;
 }
 
 // Main method that creates threads, writes and read data from files and displays data on console.
@@ -528,29 +586,8 @@ int main()
     std::vector<ImuInput> imuReadVector = readDataIMU();
     std::vector<CameraInput> cameraReadVector = readDataCamera();
 
-    std::vector<ImuInput> imuReadVectorCopy;
-    std::vector<CameraInput> cameraReadVectorCopy;
-
-    {
-        std::vector<ImuInput>::iterator itI = imuReadVector.begin();
-        std::vector<CameraInput>::iterator itC = cameraReadVector.begin();
-        ImuInput tempIMU;
-        CameraInput tempCamera;
-
-        for(;itI != imuReadVector.end(); itI++)
-        {
-            tempIMU = *itI;
-            imuReadVectorCopy.push_back(tempIMU);
-        }
-        for(;itC != cameraReadVector.end(); itC++)
-        {
-            tempCamera = *itC;
-            cameraReadVectorCopy.push_back(tempCamera);
-        }
-    }
-
-   //imuReadVectorCopy.assign(imuReadVector.begin(), imuReadVector.end());
-    //cameraReadVectorCopy.assign(cameraReadVector.begin(), cameraReadVector.end());
+    std::vector<ImuInput> imuReadVectorCopy = imuReadVector;
+    std::vector<CameraInput> cameraReadVectorCopy = hardCopyCameraVector(cameraReadVector);
 
     std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy);
 
