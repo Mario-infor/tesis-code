@@ -403,6 +403,39 @@ void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSler
     }
 }
 
+// Write camera rotations without slerp and store on .csv file.
+void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsVector)
+{
+    std::ofstream cameraRotationsFile1(dirRotationsFolder + "rotations23.csv", std::ios::out);
+    std::ofstream cameraRotationsFile2(dirRotationsFolder + "rotations30.csv", std::ios::out);
+    std::ofstream cameraRotationsFile3(dirRotationsFolder + "rotations45.csv", std::ios::out);
+    std::ofstream cameraRotationsFile4(dirRotationsFolder + "rotations80.csv", std::ios::out);
+
+    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
+    {
+        for (size_t i = 0; i < cameraRotationsVector.size(); i++)
+        {
+            for (size_t j = 0; j < cameraRotationsVector[i].markerIds.size(); j++)
+            {
+                cv::Vec3d tempRvec = cameraRotationsVector[i].rvecs[j];
+                int tempMarkerId = cameraRotationsVector[i].markerIds[j];
+
+                if (tempMarkerId == 23)
+                    cameraRotationsFile1 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+                
+                else if (tempMarkerId == 30)
+                    cameraRotationsFile2 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 45)
+                    cameraRotationsFile3 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 80)
+                    cameraRotationsFile4 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+            }
+        }
+    }
+}
+
 // Create spline points (tests at home).
 std::vector<glm::vec3> createSplinePoint(std::vector<ImuInput> imuReadVector)
 {
@@ -502,6 +535,8 @@ std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<
 {
     std::vector<CameraInterpolatedData> interpolatedPoints;
     std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVectorCopy);
+
+    cameraRotationSlerpDataWrite(frameMarkersDataVector);
 
     int indexCamera = 0;
     int indexIMU = 0;
@@ -719,7 +754,7 @@ int main()
             }
 
             FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame);
-
+            
             for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
             {
                 if (!std::isnan(frameMarkersData.rvecs[i][0]))
