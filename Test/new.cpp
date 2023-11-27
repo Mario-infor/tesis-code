@@ -50,8 +50,11 @@ struct ImuInput
 // Struct to store a list of rvects and tvects.
 struct FrameMarkersData
 {
+    std::vector<int> markerIds;
     std::vector<cv::Vec3d> rvecs;
     std::vector<cv::Vec3d> tvecs;
+    std::vector<cv::Vec4d> qvecs;
+
 };
 
 struct CameraInterpolatedData
@@ -370,15 +373,33 @@ std::vector<CameraInput> readDataCamera()
 // Write camera rotations after slerp and store on .csv file.
 void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector)
 {
-    std::ofstream cameraRotationsFile(dirRotationsFolder + "slerpRotations.csv", std::ios::out);
+    std::ofstream cameraRotationsFile1(dirRotationsFolder + "slerpRotations23.csv", std::ios::out);
+    std::ofstream cameraRotationsFile2(dirRotationsFolder + "slerpRotations30.csv", std::ios::out);
+    std::ofstream cameraRotationsFile3(dirRotationsFolder + "slerpRotations45.csv", std::ios::out);
+    std::ofstream cameraRotationsFile4(dirRotationsFolder + "slerpRotations80.csv", std::ios::out);
 
-    if (cameraRotationsFile.is_open())
+    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
     {
-       for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
-       {
-            cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[0];
-            cameraRotationsFile << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-       }
+        for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
+        {
+            for (size_t j = 0; j < cameraSlerpRotationsVector[i].frameMarkersData.markerIds.size(); j++)
+            {
+                cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[j];
+                int tempMarkerId = cameraSlerpRotationsVector[i].frameMarkersData.markerIds[j];
+
+                if (tempMarkerId == 23)
+                    cameraRotationsFile1 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+                
+                else if (tempMarkerId == 30)
+                    cameraRotationsFile2 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 45)
+                    cameraRotationsFile3 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 80)
+                    cameraRotationsFile4 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+            }
+        }
     }
 }
 
@@ -454,6 +475,7 @@ FrameMarkersData getRotationTraslationFromFrame(CameraInput frame)
 
         std::vector<cv::Vec3d> rvecs, tvecs;
         cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+        frameMarkersData.markerIds = markerIds;
         frameMarkersData.rvecs = rvecs;
         frameMarkersData.tvecs = tvecs;
     }
@@ -521,6 +543,7 @@ std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<
                     cv::Vec3d rotacionVec3 = convertQuatToOpencvRotVect(interpolatedPoint);
 
                     tempFrameMarkersData.rvecs.push_back(rotacionVec3);
+                    tempFrameMarkersData.qvecs.push_back(cv::Vec4d(interpolatedPoint.w, interpolatedPoint.x, interpolatedPoint.y, interpolatedPoint.z));
 
                     /* tempFrameMarkersData.rvecs.push_back(cv::Vec3d(
                         rotacionVec3.x * M_PI / 180,
@@ -528,6 +551,7 @@ std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<
                         rotacionVec3.z * M_PI / 180)); */
 
                     tempFrameMarkersData.tvecs.push_back(frameMarkersDataVector[indexCamera].tvecs[j]);
+                    tempFrameMarkersData.markerIds.push_back(frameMarkersDataVector[indexCamera].markerIds[j]);
                 }
 
                 tempCameraInterpolatedData.frame = tempCameraInput;
@@ -558,7 +582,7 @@ void testInterpolateCamera(std::vector<CameraInterpolatedData> interpolatedPoint
                 std::cout << "Rvec: " << interpolatedPoints[i].frameMarkersData.rvecs[j] << std::endl;
 
                 cv::aruco::drawAxis(interpolatedPoints[i].frame.frame, cameraMatrix, distCoeffs, interpolatedPoints[i].frameMarkersData.rvecs[j],
-                                interpolatedPoints[i].frameMarkersData.tvecs[j], 0.1);
+                                    interpolatedPoints[i].frameMarkersData.tvecs[j], 0.1);
             }
         }
 
@@ -698,13 +722,14 @@ int main()
 
             for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
             {
-                cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
+                if (!std::isnan(frameMarkersData.rvecs[i][0]))
+                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
             }
 
             cv::imshow("draw axis", frame.frame);
         }
 
-        cv::waitKey(1);
+        cv::waitKey(20);
 
         wrefresh(win);
         wclear(win);
