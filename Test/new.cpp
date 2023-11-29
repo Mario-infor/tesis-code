@@ -54,11 +54,11 @@ struct FrameMarkersData
     std::vector<cv::Vec3d> rvecs;
     std::vector<cv::Vec3d> tvecs;
     std::vector<cv::Vec4d> qvecs;
-
 };
 
 struct CameraInterpolatedData
 {
+    int originalOrNot; // 0 = original, 1 = interpolated.
     CameraInput frame;
     FrameMarkersData frameMarkersData;
 };
@@ -383,21 +383,22 @@ void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSler
         for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
         {
             for (size_t j = 0; j < cameraSlerpRotationsVector[i].frameMarkersData.markerIds.size(); j++)
-            {
+            {   
+                int originalOrNot = cameraSlerpRotationsVector[i].originalOrNot;
                 cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[j];
                 int tempMarkerId = cameraSlerpRotationsVector[i].frameMarkersData.markerIds[j];
 
                 if (tempMarkerId == 23)
-                    cameraRotationsFile1 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-                
+                    cameraRotationsFile1 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
                 else if (tempMarkerId == 30)
-                    cameraRotationsFile2 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+                    cameraRotationsFile2 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
 
                 else if (tempMarkerId == 45)
-                    cameraRotationsFile3 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+                    cameraRotationsFile3 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
 
                 else if (tempMarkerId == 80)
-                    cameraRotationsFile4 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+                    cameraRotationsFile4 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
             }
         }
     }
@@ -422,7 +423,7 @@ void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsV
 
                 if (tempMarkerId == 23)
                     cameraRotationsFile1 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-                
+
                 else if (tempMarkerId == 30)
                     cameraRotationsFile2 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
 
@@ -531,26 +532,31 @@ std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(std::vector<Cam
 }
 
 // Interpolate camera rotation to fit IMU data.
-std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<ImuInput> imuReadVectorCopy, const std::vector<CameraInput> cameraReadVectorCopy)
+std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<ImuInput> imuReadVectorCopy,
+                                                              const std::vector<CameraInput> cameraReadVectorCopy,
+                                                              std::vector<FrameMarkersData> frameMarkersDataVector)
 {
     std::vector<CameraInterpolatedData> interpolatedPoints;
-    std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVectorCopy);
-
-    cameraRotationSlerpDataWrite(frameMarkersDataVector);
 
     int indexCamera = 0;
     int indexIMU = 0;
 
     while (indexCamera != (int)(cameraReadVectorCopy.size() - 1))
     {
+        CameraInput tempCameraInput = cameraReadVectorCopy[indexCamera];
+        FrameMarkersData tempFrameMarkersData = frameMarkersDataVector[indexCamera];
+        CameraInterpolatedData tempCameraInterpolatedData;
+
+        tempCameraInterpolatedData.originalOrNot = 0;
+        tempCameraInterpolatedData.frame = tempCameraInput;
+        tempCameraInterpolatedData.frameMarkersData = tempFrameMarkersData;
+
+        interpolatedPoints.push_back(tempCameraInterpolatedData);
+
         for (size_t i = indexIMU; i < imuReadVectorCopy.size(); i++)
         {
             if (imuReadVectorCopy[i].time > cameraReadVectorCopy[indexCamera].time && imuReadVectorCopy[i].time < cameraReadVectorCopy[indexCamera + 1].time)
             {
-                CameraInterpolatedData tempCameraInterpolatedData;
-                CameraInput tempCameraInput;
-                FrameMarkersData tempFrameMarkersData;
-
                 tempCameraInput.index = -1;
                 tempCameraInput.time = imuReadVectorCopy[i].time;
                 tempCameraInput.frame = cameraReadVectorCopy[indexCamera].frame;
@@ -560,12 +566,6 @@ std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<
                     cv::Vec3d rotVect0 = frameMarkersDataVector[indexCamera].rvecs[j];
                     cv::Vec3d rotVect1 = frameMarkersDataVector[indexCamera + 1].rvecs[j];
 
-                    /* glm::vec3 eulerAngles0(rotVect0[0] * 180 / M_PI, rotVect0[1] * 180 / M_PI, rotVect0[2] * 180 / M_PI);
-                    glm::vec3 eulerAngles1(rotVect1[0] * 180 / M_PI, rotVect1[1] * 180 / M_PI, rotVect1[2] * 180 / M_PI);
-
-                    glm::quat quaternion0 = glm::quat(eulerAngles0);
-                    glm::quat quaternion1 = glm::quat(eulerAngles1); */
-
                     glm::quat quaternion0 = convertOpencvRotVectToQuat(rotVect0);
                     glm::quat quaternion1 = convertOpencvRotVectToQuat(rotVect1);
 
@@ -573,22 +573,16 @@ std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<
                                         (float)(cameraReadVectorCopy[indexCamera + 1].time - cameraReadVectorCopy[indexCamera].time);
 
                     glm::quat interpolatedPoint = glm::slerp(quaternion0, quaternion1, relativePos);
-
-                    // glm::vec3 rotacionVec3 = glm::eulerAngles(interpolatedPoint);
                     cv::Vec3d rotacionVec3 = convertQuatToOpencvRotVect(interpolatedPoint);
 
                     tempFrameMarkersData.rvecs.push_back(rotacionVec3);
                     tempFrameMarkersData.qvecs.push_back(cv::Vec4d(interpolatedPoint.w, interpolatedPoint.x, interpolatedPoint.y, interpolatedPoint.z));
 
-                    /* tempFrameMarkersData.rvecs.push_back(cv::Vec3d(
-                        rotacionVec3.x * M_PI / 180,
-                        rotacionVec3.y * M_PI / 180,
-                        rotacionVec3.z * M_PI / 180)); */
-
                     tempFrameMarkersData.tvecs.push_back(frameMarkersDataVector[indexCamera].tvecs[j]);
                     tempFrameMarkersData.markerIds.push_back(frameMarkersDataVector[indexCamera].markerIds[j]);
                 }
 
+                tempCameraInterpolatedData.originalOrNot = 1;
                 tempCameraInterpolatedData.frame = tempCameraInput;
                 tempCameraInterpolatedData.frameMarkersData = tempFrameMarkersData;
 
@@ -668,7 +662,11 @@ int main()
     std::vector<ImuInput> imuReadVectorCopy = imuReadVector;
     std::vector<CameraInput> cameraReadVectorCopy = hardCopyCameraVector(cameraReadVector);
 
-    std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy);
+    std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVectorCopy);
+
+    cameraRotationSlerpDataWrite(frameMarkersDataVector);
+
+    std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy, frameMarkersDataVector);
 
     cameraRotationSlerpDataWrite(interpolatedRotation);
 
@@ -754,7 +752,7 @@ int main()
             }
 
             FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame);
-            
+
             for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
             {
                 if (!std::isnan(frameMarkersData.rvecs[i][0]))
