@@ -670,7 +670,7 @@ int main()
 
     cameraRotationSlerpDataWrite(interpolatedRotation);
 
-    testInterpolateCamera(interpolatedRotation);
+    //testInterpolateCamera(interpolatedRotation);
 
     WINDOW *win;
     char buff[512];
@@ -756,13 +756,22 @@ int main()
             for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
             {
                 if (!std::isnan(frameMarkersData.rvecs[i][0]))
+                {
+                    //std::cout << "Rvec: " << frameMarkersData.rvecs[i][2] << std::endl;
+                    
+                    if (frameMarkersData.rvecs[i][2] > 0)
+                        frameMarkersData.rvecs[i] *= -1;
+
+                    std::cout << "Rvec: " << frameMarkersData.rvecs[i][2] << std::endl;
+                    
                     cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
+                }
             }
 
             cv::imshow("draw axis", frame.frame);
         }
 
-        cv::waitKey(20);
+        cv::waitKey(33);
 
         wrefresh(win);
         wclear(win);

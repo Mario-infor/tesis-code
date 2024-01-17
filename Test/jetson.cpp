@@ -3,7 +3,7 @@
 #include <opencv2/aruco.hpp>
 #include <opencv2/calib3d.hpp>
 #include <iostream>
-//#include <BNO055-BBB_driver.h>
+// #include <BNO055-BBB_driver.h>
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -25,6 +25,17 @@ struct CameraInput
     int index;
     int time;
     cv::Mat frame;
+
+    CameraInput &operator=(const CameraInput &other)
+    {
+        if (this != &other)
+        {
+            index = other.index;
+            time = other.time;
+            frame = other.frame.clone();
+        }
+        return *this;
+    }
 };
 
 // Struct to store information about each IMU data saved (Jetson Board).
@@ -42,8 +53,17 @@ struct ImuInputJetson
 // Struct to store a list of rvects and tvects.
 struct FrameMarkersData
 {
+    std::vector<int> markerIds;
     std::vector<cv::Vec3d> rvecs;
     std::vector<cv::Vec3d> tvecs;
+    std::vector<cv::Vec4d> qvecs;
+};
+
+struct CameraInterpolatedData
+{
+    int originalOrNot; // 0 = original, 1 = interpolated.
+    CameraInput frame;
+    FrameMarkersData frameMarkersData;
 };
 
 // Buffer to store camera structs.
@@ -59,6 +79,7 @@ std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
 std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 std::string dirCameraFolder = "./Data/Camera/";
 std::string dirIMUFolder = "./Data/IMU/";
+std::string dirRotationsFolder = "./Data/Rotations/";
 bool stopProgram = false;
 bool doneCalibrating = false;
 bool generateNewData = true;
@@ -164,6 +185,38 @@ void imuThreadJetson()
         index++;
     }
 }
+
+// Convert rotation vector to quaternion.
+glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
+{
+    float vecNorm = cv::norm(rotVect);
+    float w = cos(vecNorm / 2);
+    cv::Vec3d xyz = sin(vecNorm / 2) * rotVect / vecNorm;
+
+    glm::quat quaternion = glm::quat(w, xyz[0], xyz[1], xyz[2]);
+
+    return quaternion;
+}
+
+// Convert quaternion to rotation vector.
+cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion)
+{
+    cv::Vec3d rotVect;
+
+    float w = quaternion.w;
+    float x = quaternion.x;
+    float y = quaternion.y;
+    float z = quaternion.z;
+
+    float vecNorm = acos(w * 2);
+
+    rotVect[0] = x * vecNorm / sin(vecNorm / 2);
+    rotVect[1] = y * vecNorm / sin(vecNorm / 2);
+    rotVect[2] = z * vecNorm / sin(vecNorm / 2);
+
+    return rotVect;
+}
+
 
 // Write IMU data to files.
 void IMUDataJetsonWrite()
@@ -303,6 +356,75 @@ std::vector<CameraInput> readDataCamera()
     return cameraData;
 }
 
+
+// Write camera rotations after slerp and store on .csv file.
+void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector)
+{
+    std::ofstream cameraRotationsFile1(dirRotationsFolder + "slerpRotations23.csv", std::ios::out);
+    std::ofstream cameraRotationsFile2(dirRotationsFolder + "slerpRotations30.csv", std::ios::out);
+    std::ofstream cameraRotationsFile3(dirRotationsFolder + "slerpRotations45.csv", std::ios::out);
+    std::ofstream cameraRotationsFile4(dirRotationsFolder + "slerpRotations80.csv", std::ios::out);
+
+    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
+    {
+        for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
+        {
+            for (size_t j = 0; j < cameraSlerpRotationsVector[i].frameMarkersData.markerIds.size(); j++)
+            {   
+                int originalOrNot = cameraSlerpRotationsVector[i].originalOrNot;
+                cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[j];
+                int tempMarkerId = cameraSlerpRotationsVector[i].frameMarkersData.markerIds[j];
+
+                if (tempMarkerId == 23)
+                    cameraRotationsFile1 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 30)
+                    cameraRotationsFile2 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 45)
+                    cameraRotationsFile3 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 80)
+                    cameraRotationsFile4 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+            }
+        }
+    }
+}
+
+// Write camera rotations without slerp and store on .csv file.
+void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsVector)
+{
+    std::ofstream cameraRotationsFile1(dirRotationsFolder + "rotations23.csv", std::ios::out);
+    std::ofstream cameraRotationsFile2(dirRotationsFolder + "rotations30.csv", std::ios::out);
+    std::ofstream cameraRotationsFile3(dirRotationsFolder + "rotations45.csv", std::ios::out);
+    std::ofstream cameraRotationsFile4(dirRotationsFolder + "rotations80.csv", std::ios::out);
+
+    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
+    {
+        for (size_t i = 0; i < cameraRotationsVector.size(); i++)
+        {
+            for (size_t j = 0; j < cameraRotationsVector[i].markerIds.size(); j++)
+            {
+                cv::Vec3d tempRvec = cameraRotationsVector[i].rvecs[j];
+                int tempMarkerId = cameraRotationsVector[i].markerIds[j];
+
+                if (tempMarkerId == 23)
+                    cameraRotationsFile1 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 30)
+                    cameraRotationsFile2 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 45)
+                    cameraRotationsFile3 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+
+                else if (tempMarkerId == 80)
+                    cameraRotationsFile4 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
+            }
+        }
+    }
+}
+
+
 // Create spline points.
 std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector)
 {
@@ -398,6 +520,115 @@ std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(std::vector<Cam
 }
 
 
+// Interpolate camera rotation to fit IMU data.
+std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<ImuInputJetson> imuReadVectorCopy,
+                                                              const std::vector<CameraInput> cameraReadVectorCopy,
+                                                              std::vector<FrameMarkersData> frameMarkersDataVector)
+{
+    std::vector<CameraInterpolatedData> interpolatedPoints;
+
+    int indexCamera = 0;
+    int indexIMU = 0;
+
+    while (indexCamera != (int)(cameraReadVectorCopy.size() - 1))
+    {
+        CameraInput tempCameraInput = cameraReadVectorCopy[indexCamera];
+        FrameMarkersData tempFrameMarkersData = frameMarkersDataVector[indexCamera];
+        CameraInterpolatedData tempCameraInterpolatedData;
+
+        tempCameraInterpolatedData.originalOrNot = 0;
+        tempCameraInterpolatedData.frame = tempCameraInput;
+        tempCameraInterpolatedData.frameMarkersData = tempFrameMarkersData;
+
+        interpolatedPoints.push_back(tempCameraInterpolatedData);
+
+        for (size_t i = indexIMU; i < imuReadVectorCopy.size(); i++)
+        {
+            if (imuReadVectorCopy[i].time > cameraReadVectorCopy[indexCamera].time && imuReadVectorCopy[i].time < cameraReadVectorCopy[indexCamera + 1].time)
+            {
+                tempCameraInput.index = -1;
+                tempCameraInput.time = imuReadVectorCopy[i].time;
+                tempCameraInput.frame = cameraReadVectorCopy[indexCamera].frame;
+
+                for (size_t j = 0; j < frameMarkersDataVector[indexCamera].rvecs.size(); j++)
+                {
+                    cv::Vec3d rotVect0 = frameMarkersDataVector[indexCamera].rvecs[j];
+                    cv::Vec3d rotVect1 = frameMarkersDataVector[indexCamera + 1].rvecs[j];
+
+                    glm::quat quaternion0 = convertOpencvRotVectToQuat(rotVect0);
+                    glm::quat quaternion1 = convertOpencvRotVectToQuat(rotVect1);
+
+                    float relativePos = (float)(imuReadVectorCopy[i].time - cameraReadVectorCopy[indexCamera].time) /
+                                        (float)(cameraReadVectorCopy[indexCamera + 1].time - cameraReadVectorCopy[indexCamera].time);
+
+                    glm::quat interpolatedPoint = glm::slerp(quaternion0, quaternion1, relativePos);
+                    cv::Vec3d rotacionVec3 = convertQuatToOpencvRotVect(interpolatedPoint);
+
+                    tempFrameMarkersData.rvecs.push_back(rotacionVec3);
+                    tempFrameMarkersData.qvecs.push_back(cv::Vec4d(interpolatedPoint.w, interpolatedPoint.x, interpolatedPoint.y, interpolatedPoint.z));
+
+                    tempFrameMarkersData.tvecs.push_back(frameMarkersDataVector[indexCamera].tvecs[j]);
+                    tempFrameMarkersData.markerIds.push_back(frameMarkersDataVector[indexCamera].markerIds[j]);
+                }
+
+                tempCameraInterpolatedData.originalOrNot = 1;
+                tempCameraInterpolatedData.frame = tempCameraInput;
+                tempCameraInterpolatedData.frameMarkersData = tempFrameMarkersData;
+
+                interpolatedPoints.push_back(tempCameraInterpolatedData);
+
+                indexIMU = i + 1;
+            }
+            else if (imuReadVectorCopy[i].time > cameraReadVectorCopy[indexCamera + 1].time)
+                break;
+        }
+        indexCamera++;
+    }
+
+    return interpolatedPoints;
+}
+
+// Test interpolate camera rotation to fit IMU data.
+void testInterpolateCamera(std::vector<CameraInterpolatedData> interpolatedPoints)
+{
+    for (int i = 0; i < (int)interpolatedPoints.size(); i++)
+    {
+        for (size_t j = 0; j < interpolatedPoints[i].frameMarkersData.rvecs.size(); j++)
+        {
+            if (!std::isnan(interpolatedPoints[i].frameMarkersData.rvecs[j][0]))
+            {
+                std::cout << "Rvec: " << interpolatedPoints[i].frameMarkersData.rvecs[j] << std::endl;
+
+                cv::aruco::drawAxis(interpolatedPoints[i].frame.frame, cameraMatrix, distCoeffs, interpolatedPoints[i].frameMarkersData.rvecs[j],
+                                    interpolatedPoints[i].frameMarkersData.tvecs[j], 0.1);
+            }
+        }
+
+        cv::imshow("Test", interpolatedPoints[i].frame.frame);
+
+        cv::waitKey(1);
+    }
+    cv::destroyAllWindows();
+}
+
+// Create a hard copy of camera vector.
+std::vector<CameraInput> hardCopyCameraVector(std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<CameraInput> cameraReadVectorCopy;
+
+    std::vector<CameraInput>::iterator it = cameraReadVector.begin();
+    CameraInput tempCamera;
+
+    for (; it != cameraReadVector.end(); it++)
+    {
+        tempCamera = *it;
+        cameraReadVectorCopy.push_back(tempCamera);
+    }
+
+    return cameraReadVectorCopy;
+}
+
+
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
@@ -423,17 +654,18 @@ int main()
         std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
         std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
 
-        std::cout << "Spline points: " << std::endl;
-        for (size_t i = 0; i < splinePoints.size(); i++)
-        {
-            std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
-        }
+        std::vector<ImuInputJetson> imuReadVectorCopy = imuReadVector;
+        std::vector<CameraInput> cameraReadVectorCopy = hardCopyCameraVector(cameraReadVector);
 
-        std::cout << "Slerp points: " << std::endl;
-        for (size_t i = 0; i < slerpPoints.size(); i++)
-        {
-            std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
-        }
+        std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVectorCopy);
+
+        cameraRotationSlerpDataWrite(frameMarkersDataVector);
+
+        std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy, frameMarkersDataVector);
+
+        cameraRotationSlerpDataWrite(interpolatedRotation);
+
+        // testInterpolateCamera(interpolatedRotation);
 
         WINDOW *win;
         char buff[512];
@@ -455,7 +687,7 @@ int main()
         {
             if (cv::waitKey(1) == 'q')
             {
-                stopProgram = true;
+                stopProgram = stop = true;
             }
 
             if (imuIndex < imuReadVector.size())
