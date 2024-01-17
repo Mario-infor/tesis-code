@@ -83,7 +83,7 @@ std::string dirRotationsFolder = "./Data/Rotations/";
 bool stopProgram = false;
 bool doneCalibrating = false;
 bool generateNewData = false;
-bool preccessData = false;
+bool preccessData = true;
 
 cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
