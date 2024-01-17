@@ -3,7 +3,7 @@
 #include <opencv2/aruco.hpp>
 #include <opencv2/calib3d.hpp>
 #include <iostream>
-// #include <BNO055-BBB_driver.h>
+#include <BNO055-BBB_driver.h>
 #include <chrono>
 #include <curses.h>
 #include <vector>
@@ -82,7 +82,7 @@ std::string dirIMUFolder = "./Data/IMU/";
 std::string dirRotationsFolder = "./Data/Rotations/";
 bool stopProgram = false;
 bool doneCalibrating = false;
-bool generateNewData = true;
+bool generateNewData = false;
 bool preccessData = false;
 
 cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
