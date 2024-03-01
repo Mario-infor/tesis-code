@@ -2,11 +2,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#ifdef JETSON
 #include <BNO055-BBB_driver.h>
-#else
-#include <boost/asio.hpp>
-#endif
 
 // Struct to store information about each frame saved.
 struct CameraInput
@@ -15,11 +11,11 @@ struct CameraInput
 };
 
 // Pipeline for camera on JEtson Board.
-std::string get_tegra_pipeline(int width, int height, int fps)
-{
-    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
-           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
-           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+std::string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {
+    return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
+           std::to_string(capture_height) + ", framerate=(fraction)" + std::to_string(framerate) +
+           "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
+           std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 }
 
 // Main method that creates threads, writes and read data from files and displays data on console.
@@ -34,16 +30,22 @@ int main(int argc, char **argv)
             stopProgram = true;
         }
 
-#ifdef JETSON
-        int WIDTH = 640;
-        int HEIGHT = 360;
-        int FPS = 60;
-        std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
+        int capture_width = 800 ;
+        int capture_height = 600 ;
+        int display_width = 800 ;
+        int display_height = 600 ;
+        int framerate = 30 ;
+        int flip_method = 0 ;
+
+        std::string pipeline = gstreamer_pipeline(capture_width,
+            capture_height,
+            display_width,
+            display_height,
+            framerate,
+            flip_method);
+
         cv::VideoCapture cap;
         cap.open(pipeline, cv::CAP_GSTREAMER);
-#else
-        cv::VideoCapture cap(0);
-#endif
 
         if (!cap.isOpened())
             std::cerr << "Error al abrir la cámara." << std::endl;

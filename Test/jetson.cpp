@@ -11,13 +11,23 @@
 #include <mutex>
 #include <fstream>
 #include "RingBuffer.h"
+
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/spline.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 // Amount of IMU data and frames to read from devices.
-#define RINGBUFFERLENGTHCAMERA 1875
-#define RINGBUFFERLENGTHIMU 3750
+//#define RINGBUFFERLENGTHCAMERA 1875
+//#define RINGBUFFERLENGTHIMU 3750
+
+#define RINGBUFFERLENGTHCAMERA 150
+#define RINGBUFFERLENGTHIMU 300
+
+#define	MATH_PI					3.1415926535
+#define	MATH_DEGREE_TO_RAD		(MATH_PI / 180.0)
+#define	MATH_RAD_TO_DEGREE		(180.0 / MATH_PI)
+
 
 // Struct to store information about each frame saved.
 struct CameraInput
@@ -83,7 +93,8 @@ std::string dirRotationsFolder = "./Data/Rotations/";
 bool stopProgram = false;
 bool doneCalibrating = false;
 bool generateNewData = true;
-bool preccessData = true;
+bool preccessData = false;
+
 
 cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
@@ -101,13 +112,31 @@ std::string get_tegra_pipeline(int width, int height, int fps)
            "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 }
 
+std::string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {
+    return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
+           std::to_string(capture_height) + ", framerate=(fraction)" + std::to_string(framerate) +
+           "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
+           std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+}
+
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread()
 {
-    int WIDTH = 640;
-    int HEIGHT = 360;
-    int FPS = 60;
-    std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
+    int capture_width = 800 ;
+        int capture_height = 600 ;
+        int display_width = 800 ;
+        int display_height = 600 ;
+        int framerate = 30 ;
+        int flip_method = 0 ;
+
+    std::string pipeline = gstreamer_pipeline(capture_width,
+            capture_height,
+            display_width,
+            display_height,
+            framerate,
+            flip_method);
+    
+
     cv::VideoCapture cap;
     cap.open(pipeline, cv::CAP_GSTREAMER);
 
@@ -145,6 +174,22 @@ void cameraCaptureThread()
             }
         }
     }
+}
+
+void imuCalibration()
+{
+    char filename[] = "/dev/i2c-1";
+    BNO055 sensors;
+    sensors.openDevice(filename);
+
+    // Wait for calibration to finish.
+    do
+    {
+        sensors.readCalibVals();
+        printf("Sys: %d, Mag: %d, Gyro: %d, Acc: %d\n", sensors.calSys, sensors.calMag, sensors.calGyro, sensors.calAcc);
+        doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
+        doneCalibrating = false;
+    } while (!doneCalibrating);
 }
 
 // Thead in charge of reading data from the IMU.
@@ -217,7 +262,6 @@ cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion)
     return rotVect;
 }
 
-
 // Write IMU data to files.
 void IMUDataJetsonWrite()
 {
@@ -250,6 +294,22 @@ void IMUDataJetsonWrite()
             IMUDataFile << tempIMU.gravVect.x << std::endl;
             IMUDataFile << tempIMU.gravVect.y << std::endl;
             IMUDataFile << tempIMU.gravVect.z << std::endl;
+        }
+    }
+}
+
+void IMUDataWriteTestAxis()
+{
+    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
+
+    if (IMUDataFile.is_open())
+    {
+        while (!imuDataJetsonBuffer.QueueIsEmpty())
+        {
+            ImuInputJetson tempIMU;
+            imuDataJetsonBuffer.Dequeue(tempIMU);
+
+            IMUDataFile << tempIMU.accVect.x << "  " << tempIMU.accVect.y << "  " << tempIMU.accVect.z << std::endl;
         }
     }
 }
@@ -356,7 +416,6 @@ std::vector<CameraInput> readDataCamera()
     return cameraData;
 }
 
-
 // Write camera rotations after slerp and store on .csv file.
 void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector)
 {
@@ -370,7 +429,7 @@ void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSler
         for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
         {
             for (size_t j = 0; j < cameraSlerpRotationsVector[i].frameMarkersData.markerIds.size(); j++)
-            {   
+            {
                 int originalOrNot = cameraSlerpRotationsVector[i].originalOrNot;
                 cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[j];
                 int tempMarkerId = cameraSlerpRotationsVector[i].frameMarkersData.markerIds[j];
@@ -423,7 +482,6 @@ void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsV
         }
     }
 }
-
 
 // Create spline points.
 std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector)
@@ -518,7 +576,6 @@ std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(std::vector<Cam
 
     return frameMarkersDataVector;
 }
-
 
 // Interpolate camera rotation to fit IMU data.
 std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<ImuInputJetson> imuReadVectorCopy,
@@ -628,157 +685,219 @@ std::vector<CameraInput> hardCopyCameraVector(std::vector<CameraInput> cameraRea
     return cameraReadVectorCopy;
 }
 
+void printIMUData()
+{
+    char filename[] = "/dev/i2c-1";
+    BNO055 sensors;
+    sensors.openDevice(filename);
+
+    WINDOW *win;
+    char buff[512];
+
+    win = initscr();
+    clearok(win, TRUE);
+
+    float maxX = 0.0;
+    float maxY = 0.0;
+    float maxZ = 0.0;
+
+    while (true)
+    {
+        sensors.readAll();
+        wmove(win, 5, 2);
+
+
+        float tempMaxX = sensors.accelVect.vi[0] * sensors.Scale;
+        float tempMaxY = sensors.accelVect.vi[1] * sensors.Scale;
+        float tempMaxZ = sensors.accelVect.vi[2] * sensors.Scale;
+
+        if (tempMaxX > maxX)
+            maxX = tempMaxX;
+        
+        if (tempMaxY > maxY)
+            maxY = tempMaxY;
+
+        if (tempMaxZ > maxZ)
+            maxZ = tempMaxZ;
+        
+
+        //snprintf(buff, 511, "Acc = {X=%f, Y=%f, Z=%f}", maxX, maxY, maxZ);
+
+        snprintf(buff, 79, "EULER=[%07.5lf, %07.5lf, %07.3lf]",
+            sensors.eOrientation.vi[0] * sensors.Scale * MATH_RAD_TO_DEGREE,
+            sensors.eOrientation.vi[1] * sensors.Scale * MATH_RAD_TO_DEGREE,
+            sensors.eOrientation.vi[2] * sensors.Scale * MATH_RAD_TO_DEGREE);
+      
+        waddstr(win, buff);
+
+        //sleep(1);
+
+        wrefresh(win);
+        wclear(win);
+    }
+    endwin();
+} 
 
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
+    bool ifCalibrateIMUOnly = true;
     timeIMUStart = std::chrono::steady_clock::now();
 
-    if (generateNewData)
+    if (ifCalibrateIMUOnly)
     {
-        std::thread cameraCapture(cameraCaptureThread);
-        std::thread imu(imuThreadJetson);
-
-        cameraCapture.join();
-        imu.join();
-
-        cameraDataWrite();
-        IMUDataJetsonWrite();
+        //imuCalibration();
+        printIMUData();
     }
-
-    if (preccessData)
+    else
     {
-        std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
-        std::vector<CameraInput> cameraReadVector = readDataCamera();
-
-        std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
-        std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
-
-        std::vector<ImuInputJetson> imuReadVectorCopy = imuReadVector;
-        std::vector<CameraInput> cameraReadVectorCopy = hardCopyCameraVector(cameraReadVector);
-
-        std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVectorCopy);
-
-        cameraRotationSlerpDataWrite(frameMarkersDataVector);
-
-        std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy, frameMarkersDataVector);
-
-        cameraRotationSlerpDataWrite(interpolatedRotation);
-
-        // testInterpolateCamera(interpolatedRotation);
-
-        WINDOW *win;
-        char buff[512];
-
-        myMutex.lock();
-        bool stop = stopProgram;
-        myMutex.unlock();
-
-        win = initscr();
-        clearok(win, TRUE);
-
-        size_t imuIndex = 0;
-        size_t cameraIndex = 0;
-
-        int oldTimeIMU = 0;
-        int oldTimeCamera = 0;
-
-        while ((imuIndex < imuReadVector.size() || cameraIndex < cameraReadVector.size()) && !stop)
+        if (generateNewData)
         {
-            if (cv::waitKey(1) == 'q')
-            {
-                stopProgram = stop = true;
-            }
+            std::thread cameraCapture(cameraCaptureThread);
+            std::thread imu(imuThreadJetson);
 
-            if (imuIndex < imuReadVector.size())
-            {
-                ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
+            cameraCapture.join();
+            imu.join();
 
-                wmove(win, 3, 2);
-                snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
-                waddstr(win, buff);
-
-                wmove(win, 5, 2);
-                snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroVect.x, imuDataJetson.gyroVect.y, imuDataJetson.gyroVect.z);
-                waddstr(win, buff);
-
-                wmove(win, 7, 2);
-                snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerVect.x, imuDataJetson.eulerVect.y, imuDataJetson.eulerVect.z);
-                waddstr(win, buff);
-
-                wmove(win, 9, 2);
-                snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w, imuDataJetson.rotQuat.x,
-                         imuDataJetson.rotQuat.y, imuDataJetson.rotQuat.z);
-                waddstr(win, buff);
-
-                wmove(win, 11, 3);
-                snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accVect.x, imuDataJetson.accVect.y, imuDataJetson.accVect.z);
-                waddstr(win, buff);
-
-                wmove(win, 13, 2);
-                snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravVect.x, imuDataJetson.gravVect.y, imuDataJetson.gravVect.z);
-                waddstr(win, buff);
-
-                if (imuIndex != 0)
-                {
-                    wmove(win, 15, 2);
-                    snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
-                    waddstr(win, buff);
-
-                    oldTimeIMU = imuDataJetson.time;
-                }
-                else
-                {
-                    wmove(win, 15, 2);
-                    snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
-                    waddstr(win, buff);
-                }
-            }
-
-            if (cameraIndex < cameraReadVector.size())
-            {
-                CameraInput frame = cameraReadVector.at(cameraIndex);
-
-                wmove(win, 19, 2);
-                snprintf(buff, 511, "Index = %0d", frame.index);
-                waddstr(win, buff);
-
-                if (cameraIndex != 0)
-                {
-                    wmove(win, 21, 2);
-                    snprintf(buff, 511, "Time between captures (IMU): %010d", frame.time - oldTimeCamera);
-                    waddstr(win, buff);
-
-                    oldTimeCamera = frame.time;
-                }
-                else
-                {
-                    wmove(win, 21, 2);
-                    snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
-                    waddstr(win, buff);
-                }
-
-                FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame);
-
-                for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
-                {
-                    cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
-                }
-
-                cv::imshow("draw axis", frame.frame);
-            }
-
-            cv::waitKey(33);
-
-            wrefresh(win);
-            wclear(win);
-
-            imuIndex++;
-            cameraIndex++;
-            stop = stopProgram;
+            cameraDataWrite();
+            IMUDataWriteTestAxis();
+            //IMUDataJetsonWrite();
         }
 
-        endwin();
+        if (preccessData)
+        {
+            std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
+            std::vector<CameraInput> cameraReadVector = readDataCamera();
+
+            std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
+            std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
+
+            std::vector<ImuInputJetson> imuReadVectorCopy = imuReadVector;
+            std::vector<CameraInput> cameraReadVectorCopy = hardCopyCameraVector(cameraReadVector);
+
+            std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVectorCopy);
+
+            cameraRotationSlerpDataWrite(frameMarkersDataVector);
+
+            std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy, frameMarkersDataVector);
+
+            cameraRotationSlerpDataWrite(interpolatedRotation);
+
+            // testInterpolateCamera(interpolatedRotation);
+
+            WINDOW *win;
+            char buff[512];
+
+            myMutex.lock();
+            bool stop = stopProgram;
+            myMutex.unlock();
+
+            win = initscr();
+            clearok(win, TRUE);
+
+            size_t imuIndex = 0;
+            size_t cameraIndex = 0;
+
+            int oldTimeIMU = 0;
+            int oldTimeCamera = 0;
+
+            while ((imuIndex < imuReadVector.size() || cameraIndex < cameraReadVector.size()) && !stop)
+            {
+                if (cv::waitKey(1) == 'q')
+                {
+                    stopProgram = stop = true;
+                }
+
+                if (imuIndex < imuReadVector.size())
+                {
+                    ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
+
+                    wmove(win, 3, 2);
+                    snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
+                    waddstr(win, buff);
+
+                    wmove(win, 5, 2);
+                    snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroVect.x, imuDataJetson.gyroVect.y, imuDataJetson.gyroVect.z);
+                    waddstr(win, buff);
+
+                    wmove(win, 7, 2);
+                    snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerVect.x, imuDataJetson.eulerVect.y, imuDataJetson.eulerVect.z);
+                    waddstr(win, buff);
+
+                    wmove(win, 9, 2);
+                    snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w, imuDataJetson.rotQuat.x,
+                             imuDataJetson.rotQuat.y, imuDataJetson.rotQuat.z);
+                    waddstr(win, buff);
+
+                    wmove(win, 11, 3);
+                    snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accVect.x, imuDataJetson.accVect.y, imuDataJetson.accVect.z);
+                    waddstr(win, buff);
+
+                    wmove(win, 13, 2);
+                    snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravVect.x, imuDataJetson.gravVect.y, imuDataJetson.gravVect.z);
+                    waddstr(win, buff);
+
+                    if (imuIndex != 0)
+                    {
+                        wmove(win, 15, 2);
+                        snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
+                        waddstr(win, buff);
+
+                        oldTimeIMU = imuDataJetson.time;
+                    }
+                    else
+                    {
+                        wmove(win, 15, 2);
+                        snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
+                        waddstr(win, buff);
+                    }
+                }
+
+                if (cameraIndex < cameraReadVector.size())
+                {
+                    CameraInput frame = cameraReadVector.at(cameraIndex);
+
+                    wmove(win, 19, 2);
+                    snprintf(buff, 511, "Index = %0d", frame.index);
+                    waddstr(win, buff);
+
+                    if (cameraIndex != 0)
+                    {
+                        wmove(win, 21, 2);
+                        snprintf(buff, 511, "Time between captures (IMU): %010d", frame.time - oldTimeCamera);
+                        waddstr(win, buff);
+
+                        oldTimeCamera = frame.time;
+                    }
+                    else
+                    {
+                        wmove(win, 21, 2);
+                        snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
+                        waddstr(win, buff);
+                    }
+
+                    FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame);
+
+                    for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
+                    {
+                        cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
+                    }
+
+                    cv::imshow("draw axis", frame.frame);
+                }
+
+                cv::waitKey(33);
+
+                wrefresh(win);
+                wclear(win);
+
+                imuIndex++;
+                cameraIndex++;
+                stop = stopProgram;
+            }
+
+            endwin();
+        }
     }
 
     return 0;
