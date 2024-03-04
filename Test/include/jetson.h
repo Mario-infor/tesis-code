@@ -1,17 +1,3 @@
-#include <opencv2/opencv.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/aruco.hpp>
-#include <opencv2/calib3d.hpp>
-#include <iostream>
-#include <BNO055-BBB_driver.h>
-#include <chrono>
-#include <curses.h>
-#include <vector>
-#include <thread>
-#include <mutex>
-#include <fstream>
-#include "RingBuffer.h"
-
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/spline.hpp>
@@ -26,73 +12,12 @@
 #define	MATH_PI					3.1415926535 // Definition of variable pi.
 #define	MATH_DEGREE_TO_RAD		(MATH_PI / 180.0) // Conversion from degrees to radians.
 #define	MATH_RAD_TO_DEGREE		(180.0 / MATH_PI) // Conversion from radians to degrees.
-
-#define CAMERA_MATRIX = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
-                        0, 495.25862058, 166.53292108,
-                        0, 0, 1);
-
-#define CAMERA_DIST_COEFF = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
-
-// Struct to store information about each frame saved.
-struct CameraInput
-{
-    int index;
-    int time;
-    cv::Mat frame;
-
-    CameraInput &operator=(const CameraInput &other)
-    {
-        if (this != &other)
-        {
-            index = other.index;
-            time = other.time;
-            frame = other.frame.clone();
-        }
-        return *this;
-    }
-};
-
-// Struct to store information about each IMU data saved (Jetson Board).
-struct ImuInputJetson
-{
-    int index;
-    int time;
-    glm::vec3 gyroVect;
-    glm::vec3 eulerVect;
-    glm::quat rotQuat;
-    glm::vec3 accVect;
-    glm::vec3 gravVect;
-};
-
-// Struct to store a list of rvects and tvects.
-struct FrameMarkersData
-{
-    std::vector<int> markerIds;
-    std::vector<cv::Vec3d> rvecs;
-    std::vector<cv::Vec3d> tvecs;
-    std::vector<cv::Vec4d> qvecs;
-};
-
-struct CameraInterpolatedData
-{
-    int originalOrNot; // 0 = original, 1 = interpolated.
-    CameraInput frame;
-    FrameMarkersData frameMarkersData;
-};
-
-// Buffer to store camera structs.
-RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
-
-// Buffer to store IMU structs.
-RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RING_BUFFER_LENGTH_IMU);
+#define IMU_ADDRESS				"/dev/i2c-1" // Address of the IMU sensor.
 
 // Global variables that need to be accessed from different threads or methods.
 std::mutex myMutex;
 std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
 std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
-std::string dirCameraFolder = "./data/camera/";
-std::string dirIMUFolder = "./data/imu/";
-std::string dirRotationsFolder = "./data/rotations/";
 cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
 bool stopProgram = false;
@@ -123,26 +48,6 @@ glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect);
 
 // Convert quaternion to rotation vector.
 cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion);
-
-// Write IMU data to files.
-void IMUDataJetsonWrite();
-
-// Write IMU data to files for testing the axis distribution.
-void IMUDataWriteTestAxis();
-
-// Read IMU data from files.
-std::vector<ImuInputJetson> readDataIMUJetson();
-
-// Write camera time data to file and store all frams as .png files.
-void cameraDataWrite();
-
-// Read camera data and frames from files.
-std::vector<CameraInput> readDataCamera();
-
-// Write camera rotations after slerp and store on .csv file.
-void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector);
-// Write camera rotations without slerp and store on .csv file.
-void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsVector);
 
 // Create spline points.
 std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector);

@@ -2,101 +2,24 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <opencv2/calib3d.hpp>
-#include <iostream>
-#include <BNO055-BBB_driver.h>
 #include <chrono>
 #include <curses.h>
 #include <vector>
 #include <thread>
 #include <mutex>
-#include <fstream>
-#include "RingBuffer.h"
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/glm.hpp>
-#include <glm/gtx/spline.hpp>
-#include <glm/gtc/quaternion.hpp>
-
-// Amount of IMU data and frames to read from devices.
-//#define RINGBUFFERLENGTHCAMERA 1875
-//#define RINGBUFFERLENGTHIMU 3750
-
-#define RINGBUFFERLENGTHCAMERA 150
-#define RINGBUFFERLENGTHIMU 300
-
-#define	MATH_PI					3.1415926535
-#define	MATH_DEGREE_TO_RAD		(MATH_PI / 180.0)
-#define	MATH_RAD_TO_DEGREE		(180.0 / MATH_PI)
-
-
-// Struct to store information about each frame saved.
-struct CameraInput
-{
-    int index;
-    int time;
-    cv::Mat frame;
-
-    CameraInput &operator=(const CameraInput &other)
-    {
-        if (this != &other)
-        {
-            index = other.index;
-            time = other.time;
-            frame = other.frame.clone();
-        }
-        return *this;
-    }
-};
-
-// Struct to store information about each IMU data saved (Jetson Board).
-struct ImuInputJetson
-{
-    int index;
-    int time;
-    glm::vec3 gyroVect;
-    glm::vec3 eulerVect;
-    glm::quat rotQuat;
-    glm::vec3 accVect;
-    glm::vec3 gravVect;
-};
-
-// Struct to store a list of rvects and tvects.
-struct FrameMarkersData
-{
-    std::vector<int> markerIds;
-    std::vector<cv::Vec3d> rvecs;
-    std::vector<cv::Vec3d> tvecs;
-    std::vector<cv::Vec4d> qvecs;
-};
-
-struct CameraInterpolatedData
-{
-    int originalOrNot; // 0 = original, 1 = interpolated.
-    CameraInput frame;
-    FrameMarkersData frameMarkersData;
-};
+#include <iostream>
+#include <readWriteData.h>
+#include <structsFile.h>
+#include <RingBuffer.h>
+#include <BNO055-BBB_driver.h>
+#include <jetson.h>
 
 // Buffer to store camera structs.
-RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RINGBUFFERLENGTHCAMERA);
+RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
 
 // Buffer to store IMU structs.
+RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RING_BUFFER_LENGTH_IMU);
 
-RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RINGBUFFERLENGTHIMU);
-
-// Global variables that need to be accessed from different threads or methods.
-std::mutex myMutex;
-std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
-std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
-std::string dirCameraFolder = "./Data/Camera/";
-std::string dirIMUFolder = "./Data/IMU/";
-std::string dirRotationsFolder = "./Data/Rotations/";
-bool stopProgram = false;
-bool doneCalibrating = false;
-bool generateNewData = true;
-bool preccessData = false;
-
-
-cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
 cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
                         0, 495.25862058, 166.53292108,
@@ -104,49 +27,33 @@ cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
 
 cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
 
-// Pipeline for camera on JEtson Board.
-std::string get_tegra_pipeline(int width, int height, int fps)
-{
-    return "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(width) + ", height=(int)" +
-           std::to_string(height) + ", format=(string)I420, framerate=(fraction)" + std::to_string(fps) +
-           "/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
-}
-
-std::string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {
-    return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
-           std::to_string(capture_height) + ", framerate=(fraction)" + std::to_string(framerate) +
-           "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
-           std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
-}
-
-// Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread()
 {
-    int capture_width = 800 ;
-        int capture_height = 600 ;
-        int display_width = 800 ;
-        int display_height = 600 ;
-        int framerate = 30 ;
-        int flip_method = 0 ;
+    int captureWidth = 800 ;
+        int captureHeight = 600 ;
+        int displayWidth = 800 ;
+        int displayHeight = 600 ;
+        int frameRate = 30 ;
+        int flipMethod = 0 ;
 
-    std::string pipeline = gstreamer_pipeline(capture_width,
-            capture_height,
-            display_width,
-            display_height,
-            framerate,
-            flip_method);
+    std::string pipeline = gstreamer_pipeline(captureWidth,
+            captureHeight,
+            displayWidth,
+            displayHeight,
+            frameRate,
+            flipMethod);
     
 
     cv::VideoCapture cap;
     cap.open(pipeline, cv::CAP_GSTREAMER);
 
     if (!cap.isOpened())
-        std::cerr << "Error al abrir la cámara." << std::endl;
+        std::cerr << "Error openning the camera." << std::endl;
     else
     {
         int index = 0;
 
-        while (index < RINGBUFFERLENGTHCAMERA)
+        while (index < RING_BUFFER_LENGTH_CAMERA)
         {
             std::cout << "Camera: " << index << std::endl;
             if (doneCalibrating)
@@ -157,7 +64,7 @@ void cameraCaptureThread()
 
                 if (frame.empty())
                 {
-                    std::cerr << "No se pudo capturar el frame." << std::endl;
+                    std::cerr << "Could not capture frame." << std::endl;
                     break;
                 }
                 else
@@ -178,7 +85,7 @@ void cameraCaptureThread()
 
 void imuCalibration()
 {
-    char filename[] = "/dev/i2c-1";
+    char filename[] = IMU_ADDRESS;
     BNO055 sensors;
     sensors.openDevice(filename);
 
@@ -196,7 +103,7 @@ void imuCalibration()
 void imuThreadJetson()
 {
     int cont = 0;
-    char filename[] = "/dev/i2c-1";
+    char filename[] = IMU_ADDRESS;
     BNO055 sensors;
     sensors.openDevice(filename);
 
@@ -210,7 +117,7 @@ void imuThreadJetson()
     doneCalibrating = true;
     int index = 0;
 
-    while (index < RINGBUFFERLENGTHIMU)
+    while (index < RING_BUFFER_LENGTH_IMU)
     {
         sensors.readAll();
 
@@ -260,227 +167,6 @@ cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion)
     rotVect[2] = z * vecNorm / sin(vecNorm / 2);
 
     return rotVect;
-}
-
-// Write IMU data to files.
-void IMUDataJetsonWrite()
-{
-    std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
-    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
-
-    if (IMUTimeFile.is_open() && IMUDataFile.is_open())
-    {
-        while (!imuDataJetsonBuffer.QueueIsEmpty())
-        {
-            ImuInputJetson tempIMU;
-            imuDataJetsonBuffer.Dequeue(tempIMU);
-
-            IMUTimeFile << tempIMU.time << std::endl;
-
-            IMUDataFile << tempIMU.index << std::endl;
-            IMUDataFile << tempIMU.gyroVect.x << std::endl;
-            IMUDataFile << tempIMU.gyroVect.y << std::endl;
-            IMUDataFile << tempIMU.gyroVect.z << std::endl;
-            IMUDataFile << tempIMU.eulerVect.x << std::endl;
-            IMUDataFile << tempIMU.eulerVect.y << std::endl;
-            IMUDataFile << tempIMU.eulerVect.z << std::endl;
-            IMUDataFile << tempIMU.rotQuat.w << std::endl;
-            IMUDataFile << tempIMU.rotQuat.x << std::endl;
-            IMUDataFile << tempIMU.rotQuat.y << std::endl;
-            IMUDataFile << tempIMU.rotQuat.z << std::endl;
-            IMUDataFile << tempIMU.accVect.x << std::endl;
-            IMUDataFile << tempIMU.accVect.y << std::endl;
-            IMUDataFile << tempIMU.accVect.z << std::endl;
-            IMUDataFile << tempIMU.gravVect.x << std::endl;
-            IMUDataFile << tempIMU.gravVect.y << std::endl;
-            IMUDataFile << tempIMU.gravVect.z << std::endl;
-        }
-    }
-}
-
-void IMUDataWriteTestAxis()
-{
-    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
-
-    if (IMUDataFile.is_open())
-    {
-        while (!imuDataJetsonBuffer.QueueIsEmpty())
-        {
-            ImuInputJetson tempIMU;
-            imuDataJetsonBuffer.Dequeue(tempIMU);
-
-            IMUDataFile << tempIMU.accVect.x << "  " << tempIMU.accVect.y << "  " << tempIMU.accVect.z << std::endl;
-        }
-    }
-}
-
-// Read IMU data from files.
-std::vector<ImuInputJetson> readDataIMUJetson()
-{
-    std::vector<ImuInputJetson> IMUData;
-    std::ifstream fileTime(dirIMUFolder + "IMUTime");
-    std::ifstream fileData(dirIMUFolder + "IMUData");
-
-    if (!fileTime || !fileData)
-        std::cerr << "Files not found." << std::endl;
-    else
-    {
-        int value;
-        while (fileTime >> value)
-        {
-            ImuInputJetson tempIMUInput;
-
-            tempIMUInput.time = value;
-
-            fileData >> tempIMUInput.index;
-            fileData >> tempIMUInput.gyroVect.x;
-            fileData >> tempIMUInput.gyroVect.y;
-            fileData >> tempIMUInput.gyroVect.z;
-            fileData >> tempIMUInput.eulerVect.x;
-            fileData >> tempIMUInput.eulerVect.y;
-            fileData >> tempIMUInput.eulerVect.z;
-            fileData >> tempIMUInput.rotQuat.w;
-            fileData >> tempIMUInput.rotQuat.x;
-            fileData >> tempIMUInput.rotQuat.y;
-            fileData >> tempIMUInput.rotQuat.z;
-            fileData >> tempIMUInput.accVect.x;
-            fileData >> tempIMUInput.accVect.y;
-            fileData >> tempIMUInput.accVect.z;
-            fileData >> tempIMUInput.gravVect.x;
-            fileData >> tempIMUInput.gravVect.y;
-            fileData >> tempIMUInput.gravVect.z;
-
-            IMUData.push_back(tempIMUInput);
-        }
-    }
-
-    return IMUData;
-}
-
-// Write camera time data to file and store all frams as .png files.
-void cameraDataWrite()
-{
-    std::ofstream cameraTimeFile(dirCameraFolder + "cameraTime", std::ios::out);
-
-    if (cameraTimeFile.is_open())
-    {
-        while (!cameraFramesBuffer.QueueIsEmpty())
-        {
-            char buff[256];
-
-            CameraInput tempFrame;
-            cameraFramesBuffer.Dequeue(tempFrame);
-            snprintf(buff, 255, "frame_%06d.png", tempFrame.index);
-            std::string imageName(buff);
-            cv::imwrite(dirCameraFolder + imageName, tempFrame.frame);
-
-            cameraTimeFile << tempFrame.time << std::endl;
-        }
-    }
-}
-
-// Read camera data and frames from files.
-std::vector<CameraInput> readDataCamera()
-{
-    std::vector<CameraInput> cameraData;
-    std::ifstream fileTime(dirCameraFolder + "cameraTime");
-
-    int index = 0;
-    std::string imageName = "";
-    cv::Mat image;
-
-    char buff[256];
-
-    if (!fileTime)
-        std::cerr << "File not found." << std::endl;
-    else
-    {
-        int value;
-        while (fileTime >> value)
-        {
-            CameraInput tempCameraInput;
-            tempCameraInput.time = value;
-            tempCameraInput.index = index;
-
-            snprintf(buff, 255, "frame_%06d.png", tempCameraInput.index);
-            // imageName = "frame_" + std::to_string(index) + ".png";
-            std::string imageName(buff);
-            image = cv::imread(dirCameraFolder + imageName, cv::IMREAD_GRAYSCALE);
-            image.copyTo(tempCameraInput.frame);
-
-            cameraData.push_back(tempCameraInput);
-            index++;
-        }
-    }
-
-    return cameraData;
-}
-
-// Write camera rotations after slerp and store on .csv file.
-void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector)
-{
-    std::ofstream cameraRotationsFile1(dirRotationsFolder + "slerpRotations23.csv", std::ios::out);
-    std::ofstream cameraRotationsFile2(dirRotationsFolder + "slerpRotations30.csv", std::ios::out);
-    std::ofstream cameraRotationsFile3(dirRotationsFolder + "slerpRotations45.csv", std::ios::out);
-    std::ofstream cameraRotationsFile4(dirRotationsFolder + "slerpRotations80.csv", std::ios::out);
-
-    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
-    {
-        for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
-        {
-            for (size_t j = 0; j < cameraSlerpRotationsVector[i].frameMarkersData.markerIds.size(); j++)
-            {
-                int originalOrNot = cameraSlerpRotationsVector[i].originalOrNot;
-                cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[j];
-                int tempMarkerId = cameraSlerpRotationsVector[i].frameMarkersData.markerIds[j];
-
-                if (tempMarkerId == 23)
-                    cameraRotationsFile1 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 30)
-                    cameraRotationsFile2 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 45)
-                    cameraRotationsFile3 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 80)
-                    cameraRotationsFile4 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-            }
-        }
-    }
-}
-
-// Write camera rotations without slerp and store on .csv file.
-void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsVector)
-{
-    std::ofstream cameraRotationsFile1(dirRotationsFolder + "rotations23.csv", std::ios::out);
-    std::ofstream cameraRotationsFile2(dirRotationsFolder + "rotations30.csv", std::ios::out);
-    std::ofstream cameraRotationsFile3(dirRotationsFolder + "rotations45.csv", std::ios::out);
-    std::ofstream cameraRotationsFile4(dirRotationsFolder + "rotations80.csv", std::ios::out);
-
-    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
-    {
-        for (size_t i = 0; i < cameraRotationsVector.size(); i++)
-        {
-            for (size_t j = 0; j < cameraRotationsVector[i].markerIds.size(); j++)
-            {
-                cv::Vec3d tempRvec = cameraRotationsVector[i].rvecs[j];
-                int tempMarkerId = cameraRotationsVector[i].markerIds[j];
-
-                if (tempMarkerId == 23)
-                    cameraRotationsFile1 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 30)
-                    cameraRotationsFile2 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 45)
-                    cameraRotationsFile3 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 80)
-                    cameraRotationsFile4 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-            }
-        }
-    }
 }
 
 // Create spline points.
@@ -687,7 +373,7 @@ std::vector<CameraInput> hardCopyCameraVector(std::vector<CameraInput> cameraRea
 
 void printIMUData()
 {
-    char filename[] = "/dev/i2c-1";
+    char filename[] = IMU_ADDRESS;
     BNO055 sensors;
     sensors.openDevice(filename);
 
@@ -741,6 +427,7 @@ void printIMUData()
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
+    
     bool ifCalibrateIMUOnly = true;
     timeIMUStart = std::chrono::steady_clock::now();
 
