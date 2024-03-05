@@ -32,8 +32,9 @@ void predict(cv::KalmanFilter &KF)
     KF.errorCovPre = KF.transitionMatrix * KF.errorCovPost * KF.transitionMatrix.t() + KF.processNoiseCov;
 }
 
-void measurement(cv::Mat_<float> &measurement)
+void doMeasurement(cv::Mat_<float> &measurement)
 {
+    //TODO: Read measurement from data files.
     measurement(0) = 1;
     measurement(1) = 1;
     measurement(2) = 1;
@@ -104,6 +105,7 @@ void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
 int main()
 {
     bool firstRun = true;
+    float deltaT = 10;
     cv::KalmanFilter KF(14, 6, 0);
 
     // Create measurement vector (rvec, tvec).
@@ -116,12 +118,17 @@ int main()
     if (!firstRun)
     {
         predict(KF);
-        measurement(measurement);
+
+        updateTransitionMatrix(KF, deltaT);
+        updateMeasurementMatrix(KF);
+
+        doMeasurement(measurement);
+
         correct(KF, measurement);
     }
     else
     {
-        measurement(measurement);
+        doMeasurement(measurement);
         initStatePostFirstTime(KF, measurement);
         firstRun = false;
     }

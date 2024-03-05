@@ -4,7 +4,7 @@ void initKalmanFilter(class KalmanFilter &KF);
 
 void predict(class KalmanFilter &KF);
 
-void measurement(class Mat_ &measurement);
+void doMeasurement(class Mat_ &measurement);
 
 void correct();
 
