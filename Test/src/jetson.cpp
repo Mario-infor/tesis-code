@@ -8,12 +8,12 @@
 #include <thread>
 #include <mutex>
 #include <iostream>
-#include <readWriteData.h>
-#include <structsFile.h>
-#include <RingBuffer.h>
 #include <BNO055-BBB_driver.h>
-#include <jetson.h>
-#include <utils.h>
+#include "readWriteData.h"
+#include "structsFile.h"
+#include "RingBuffer.h"
+#include "jetson.h"
+#include "utils.h"
 
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
@@ -324,23 +324,6 @@ void testInterpolateCamera(std::vector<CameraInterpolatedData> interpolatedPoint
     cv::destroyAllWindows();
 }
 
-// Create a hard copy of camera vector.
-std::vector<CameraInput> hardCopyCameraVector(std::vector<CameraInput> cameraReadVector)
-{
-    std::vector<CameraInput> cameraReadVectorCopy;
-
-    std::vector<CameraInput>::iterator it = cameraReadVector.begin();
-    CameraInput tempCamera;
-
-    for (; it != cameraReadVector.end(); it++)
-    {
-        tempCamera = *it;
-        cameraReadVectorCopy.push_back(tempCamera);
-    }
-
-    return cameraReadVectorCopy;
-}
-
 void printIMUData()
 {
     char filename[] = IMU_ADDRESS;
@@ -403,8 +386,8 @@ int main()
 
     if (ifCalibrateIMUOnly)
     {
-        //imuCalibration();
-        printIMUData();
+        imuCalibration();
+        //printIMUData();
     }
     else
     {

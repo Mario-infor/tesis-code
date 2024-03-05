@@ -1,5 +1,5 @@
 BNO055_DIR = $(HOME)/Mario/BNO055-BBB_IMU-Driver
-CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include
+CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include -I ./include
 
 CC = g++ 
 PROJECT = build/new_output

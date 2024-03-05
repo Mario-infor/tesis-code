@@ -1,0 +1,33 @@
+CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include 
+CC = g++
+
+BNO055_DIR = $(HOME)/Mario/BNO055-BBB_IMU-Driver
+OBJS_DIR = ./objs
+SRC_DIR = ./src
+BUILD_DIR = ./build
+INCLUDE_DIR = ./include
+
+JETSON_LIBS = `pkg-config --cflags --libs opencv4` -lncurses \
+			 $(BNO055_DIR)/objs/BNO055-BBB_driver.o -lpthread
+
+COMMON_OBJS = $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o
+
+JETSON_OBJS = $(OBJS_DIR)/jetson.o COMMON_OBJS
+
+EKF_OBJS = 	$(OBJS_DIR)/EKF.o COMMON_OBJS
+
+all: jetson EKF readShow
+
+jetson: $(JETSON_OBJS)
+	$(CC) $(CPPFLAGS) $(JETSON_OBJS) -o $(BUILD_DIR)/jetson $(LIBS)
+
+EKF: 
+
+$(OBJS_DIR)/%.o: $(SRC_DIR)/%.cpp
+	$(CC) $(CPPFLAGS) -c -I$(INCLUDE_DIR) $@ -o $<
+
+-include $(OBJS_DIR)/*.d
+
+.PHONE: clean
+clean:
+	rm -f objs/*.o build/jetson build/EKF build/readShow

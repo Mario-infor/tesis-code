@@ -1,4 +1,5 @@
-#include <utils.h>
+#include "utils.h"
+#include "structsFile.h"
 
 // Convert rotation vector to quaternion.
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
@@ -29,4 +30,21 @@ cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion)
     rotVect[2] = z * vecNorm / sin(vecNorm / 2);
 
     return rotVect;
+}
+
+// Create a hard copy of camera vector.
+std::vector<CameraInput> hardCopyCameraVector(std::vector<CameraInput> cameraReadVector)
+{
+    std::vector<CameraInput> cameraReadVectorCopy;
+
+    std::vector<CameraInput>::iterator it = cameraReadVector.begin();
+    CameraInput tempCamera;
+
+    for (; it != cameraReadVector.end(); it++)
+    {
+        tempCamera = *it;
+        cameraReadVectorCopy.push_back(tempCamera);
+    }
+
+    return cameraReadVectorCopy;
 }
