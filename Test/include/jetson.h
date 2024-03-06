@@ -1,7 +1,12 @@
+#ifndef JETSON_H
+#define JETSON_H
+
+#include <readWriteData.h>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/spline.hpp>
 #include <glm/gtc/quaternion.hpp>
+
 
 // Amount of IMU data and frames to read from devices.
 //#define RING_BUFFER_LENGTH_CAMERA 1875
@@ -20,11 +25,7 @@ std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
 std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
 
-bool stopProgram = false;
 bool doneCalibrating = false;
-bool generateNewData = true;
-bool preccessData = false;
-
 
 // Pipeline for camera on Jetson Board.
 std::string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {
@@ -77,3 +78,5 @@ std::vector<CameraInput> hardCopyCameraVector(std::vector<CameraInput> cameraRea
 
 // Print data from the IMU to the console for testing.
 void printIMUData();
+
+#endif // JETSON_H

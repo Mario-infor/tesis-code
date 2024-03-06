@@ -1,33 +1,85 @@
-CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include 
+INCLUDE_JETSON =./include
+
+CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include -I $(INCLUDE_JETSON)
 CC = g++
 
 BNO055_DIR = $(HOME)/Mario/BNO055-BBB_IMU-Driver
-OBJS_DIR = ./objs
-SRC_DIR = ./src
-BUILD_DIR = ./build
-INCLUDE_DIR = ./include
 
 JETSON_LIBS = `pkg-config --cflags --libs opencv4` -lncurses \
 			 $(BNO055_DIR)/objs/BNO055-BBB_driver.o -lpthread
 
-COMMON_OBJS = $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o
 
-JETSON_OBJS = $(OBJS_DIR)/jetson.o COMMON_OBJS
 
-EKF_OBJS = 	$(OBJS_DIR)/EKF.o COMMON_OBJS
+all: build/jetson
 
-all: jetson EKF readShow
+build/jetson: src/jetson.cpp src/readWriteData.cpp src/utils.cpp include/jetson.h include/readWriteData.h include/utils.h include/structsFile.h include/RingBuffer.h
+	$(CC) $(CPPFLAGS) src/readWriteData.cpp src/utils.cpp src/jetson.cpp -o build/jetson $(JETSON_LIBS)
 
-jetson: $(JETSON_OBJS)
-	$(CC) $(CPPFLAGS) $(JETSON_OBJS) -o $(BUILD_DIR)/jetson $(LIBS)
+#build/jetson: objs/jetson.o objs/readWriteData.o objs/utils.o
+#	$(CC) $(CPPFLAGS) objs/jetson.o objs/readWriteData.o objs/utils.o -o $@ $(JETSON_LIBS) 
 
-EKF: 
+#objs/jetson.o: src/jetson.cpp src/readWriteData.cpp include/jetson.h include/readWriteData.h include/utils.h include/structsFile.h include/RingBuffer.h 
+#	$(CC) $(CPPFLAGS) -I include -c src/jetson.cpp src/readWriteData.cpp -o $@ $(JETSON_LIBS)
 
-$(OBJS_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CC) $(CPPFLAGS) -c -I$(INCLUDE_DIR) $@ -o $<
+#objs/readWriteData.o: src/readWriteData.cpp include/readWriteData.h include/RingBuffer.h
+#	$(CC) $(CPPFLAGS) -I include -c src/readWriteData.cpp -o $@ $(JETSON_LIBS)
 
--include $(OBJS_DIR)/*.d
+#objs/utils.o: src/utils.cpp include/utils.h include/structsFile.h
+#	$(CC) $(CPPFLAGS) -I include -c src/utils.cpp -o $@ $(JETSON_LIBS)
 
-.PHONE: clean
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#OBJS_DIR = objs
+#SRC_DIR = src
+#BUILD_DIR = build
+#INCLUDE_DIR = ./include
+
+#COMMON_OBJS = $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o
+
+#JETSON_OBJS = $(OBJS_DIR)/jetson.o COMMON_OBJS
+
+#EKF_OBJS = 	$(OBJS_DIR)/EKF.o COMMON_OBJS
+
+#all: jetson EKF readShow
+
+#jetson: $(JETSON_OBJS)
+#	$(CC) $(CPPFLAGS) $(JETSON_OBJS) -o $(BUILD_DIR)/jetson $(JETSON_LIBS)
+
+#EKF: $(EKF_OBJS)
+#	$(CC) $(CPPFLAGS) $(EKF_OBJS) -o $(BUILD_DIR)/EKF $(JETSON_LIBS)
+
+#readShow: $(OBJS_DIR)/readShow.o
+#	$(CC) $(CPPFLAGS) $(EKF_OBJS) -o $(BUILD_DIR)/EKF $(JETSON_LIBS)
+
+#$(OBJS_DIR)/readWriteData.o: $(SRC_DIR)/readWriteData.cpp
+#	$(CC) $(CPPFLAGS) -I $(INCLUDE_DIR) -c $^ -o $@ $(JETSON_LIBS)
+
+#$(OBJS_DIR)/utils.o: $(SRC_DIR)/utils.cpp
+#	$(CC) $(CPPFLAGS) -I $(INCLUDE_DIR) -c $^ -o $@ $(JETSON_LIBS)
+
+#$(OBJS_DIR)/%.o: $(SRC_DIR)/%.cpp
+#	$(CC) $(CPPFLAGS) -I $(INCLUDE_DIR) -c $^ -o $@ $(JETSON_LIBS)
+
+#-include $(OBJS_DIR)/*.d
+
+.PHONY: clean
 clean:
 	rm -f objs/*.o build/jetson build/EKF build/readShow

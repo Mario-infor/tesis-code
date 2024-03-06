@@ -1,9 +1,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <fstream>
-#include "readWriteData.h"
-#include "structsFile.h"
-#include "RingBuffer.h"
+#include <readWriteData.h>
+#include <RingBuffer.h>
 
 std::string dirCameraFolder = "./data/camera/";
 std::string dirIMUFolder = "./data/imu/";
@@ -103,6 +102,7 @@ std::vector<ImuInputJetson> readDataIMUJetson()
     return IMUData;
 }
 
+
 void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
 {
     std::ofstream cameraTimeFile(dirCameraFolder + "cameraTime", std::ios::out);
@@ -123,6 +123,7 @@ void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
         }
     }
 }
+
 
 std::vector<CameraInput> readDataCamera()
 {

@@ -10,7 +10,7 @@
 #include <thread>
 #include <mutex>
 #include <fstream>
-#include "RingBuffer.h"
+#include <RingBuffer.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/spline.hpp>
 #include <glm/gtc/quaternion.hpp>

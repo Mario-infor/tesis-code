@@ -8,12 +8,12 @@
 #include <thread>
 #include <mutex>
 #include <iostream>
+#include <fstream>
 #include <BNO055-BBB_driver.h>
-#include "readWriteData.h"
-#include "structsFile.h"
-#include "RingBuffer.h"
-#include "jetson.h"
-#include "utils.h"
+#include <structsFile.h>
+#include <RingBuffer.h>
+#include <jetson.h>
+#include <utils.h>
 
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
@@ -380,8 +380,11 @@ void printIMUData()
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
-    
+    bool preccessData = false;
+    bool generateNewData = true;
+    bool stopProgram = false;
     bool ifCalibrateIMUOnly = true;
+    
     timeIMUStart = std::chrono::steady_clock::now();
 
     if (ifCalibrateIMUOnly)
@@ -399,8 +402,8 @@ int main()
             cameraCapture.join();
             imu.join();
 
-            cameraDataWrite();
-            IMUDataWriteTestAxis();
+            cameraDataWrite(cameraFramesBuffer);
+            //IMUDataWriteTestAxis();
             //IMUDataJetsonWrite();
         }
 

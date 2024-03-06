@@ -1,3 +1,6 @@
+#ifndef __STRUCTSFILE__
+#define __STRUCTSFILE__
+
 #include <opencv2/opencv.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -48,3 +51,5 @@ struct CameraInterpolatedData
     CameraInput frame;
     FrameMarkersData frameMarkersData;
 };
+
+#endif

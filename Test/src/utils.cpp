@@ -1,5 +1,4 @@
-#include "utils.h"
-#include "structsFile.h"
+#include <utils.h>
 
 // Convert rotation vector to quaternion.
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
