@@ -10,10 +10,15 @@
 #include <iostream>
 #include <fstream>
 #include <BNO055-BBB_driver.h>
-#include <structsFile.h>
-#include <RingBuffer.h>
+#include <readWriteData.h>
 #include <jetson.h>
 #include <utils.h>
+#include <interpolationUtils.h>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
+#include <glm/gtx/spline.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
@@ -139,258 +144,22 @@ void imuThreadJetson()
     }
 }
 
-// Create spline points.
-std::vector<glm::vec3> createSplinePoint(std::vector<ImuInputJetson> imuReadVector)
-{
-    std::vector<glm::vec3> points;
 
-    for (size_t i = 0; i < imuReadVector.size() - 4; i++)
-    {
-        // Create a for loop for t values from 0 to 1 with a step of 0.1.
-        for (float t = 0; t < 1; t += 0.1)
-        {
-            glm::vec3 tempPoint = glm::catmullRom(imuReadVector[i].accVect, imuReadVector[i + 1].accVect,
-                                                  imuReadVector[i + 2].accVect, imuReadVector[i + 3].accVect, t);
-
-            points.push_back(tempPoint);
-        }
-    }
-
-    return points;
-}
-
-// Create slerp points for quaternions (tests at home).
-std::vector<glm::quat> createSlerpPoint(std::vector<ImuInputJetson> imuReadVector)
-{
-    std::vector<glm::quat> points;
-
-    for (size_t i = 0; i < imuReadVector.size() - 1; i++)
-    {
-        // Create a for loop for t values from 0 to 1 with a step of 0.1.
-        for (float t = 0; t < 1; t += 0.1)
-        {
-            glm::quat tempPoint = glm::slerp(imuReadVector.at(i).rotQuat, imuReadVector.at(i + 1).rotQuat, t);
-            points.push_back(tempPoint);
-        }
-    }
-
-    return points;
-}
-
-// Tests Slerp and Spline methods.
-void testSlerpAndSpline(std::vector<ImuInputJetson> imuReadVector, std::vector<CameraInput> cameraReadVector)
-{
-    std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
-    std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
-
-    std::cout << "Spline points: " << std::endl;
-    for (size_t i = 0; i < splinePoints.size(); i++)
-    {
-        std::cout << "X: " << splinePoints[i].x << " Y: " << splinePoints[i].y << " Z: " << splinePoints[i].z << std::endl;
-    }
-
-    std::cout << "Slerp points: " << std::endl;
-    for (size_t i = 0; i < slerpPoints.size(); i++)
-    {
-        std::cout << "W: " << slerpPoints[i].w << " X: " << slerpPoints[i].x << " Y: " << slerpPoints[i].y << " Z: " << slerpPoints[i].z << std::endl;
-    }
-}
-
-// Get rotation and translation from frame.
-FrameMarkersData getRotationTraslationFromFrame(CameraInput frame)
-{
-    FrameMarkersData frameMarkersData;
-
-    std::vector<int> markerIds;
-    std::vector<std::vector<cv::Point2f>> markerCorners;
-
-    cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
-
-    if (markerIds.size() > 0)
-    {
-        cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
-
-        std::vector<cv::Vec3d> rvecs, tvecs;
-        cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
-        frameMarkersData.rvecs = rvecs;
-        frameMarkersData.tvecs = tvecs;
-    }
-
-    return frameMarkersData;
-}
-
-// Get rotation and translation from all frames.
-std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(std::vector<CameraInput> cameraReadVector)
-{
-    std::vector<FrameMarkersData> frameMarkersDataVector;
-
-    for (size_t i = 0; i < cameraReadVector.size(); i++)
-    {
-        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraReadVector[i]);
-        frameMarkersDataVector.push_back(frameMarkersData);
-    }
-
-    return frameMarkersDataVector;
-}
-
-// Interpolate camera rotation to fit IMU data.
-std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<ImuInputJetson> imuReadVectorCopy,
-                                                              const std::vector<CameraInput> cameraReadVectorCopy,
-                                                              std::vector<FrameMarkersData> frameMarkersDataVector)
-{
-    std::vector<CameraInterpolatedData> interpolatedPoints;
-
-    int indexCamera = 0;
-    int indexIMU = 0;
-
-    while (indexCamera != (int)(cameraReadVectorCopy.size() - 1))
-    {
-        CameraInput tempCameraInput = cameraReadVectorCopy[indexCamera];
-        FrameMarkersData tempFrameMarkersData = frameMarkersDataVector[indexCamera];
-        CameraInterpolatedData tempCameraInterpolatedData;
-
-        tempCameraInterpolatedData.originalOrNot = 0;
-        tempCameraInterpolatedData.frame = tempCameraInput;
-        tempCameraInterpolatedData.frameMarkersData = tempFrameMarkersData;
-
-        interpolatedPoints.push_back(tempCameraInterpolatedData);
-
-        for (size_t i = indexIMU; i < imuReadVectorCopy.size(); i++)
-        {
-            if (imuReadVectorCopy[i].time > cameraReadVectorCopy[indexCamera].time && imuReadVectorCopy[i].time < cameraReadVectorCopy[indexCamera + 1].time)
-            {
-                tempCameraInput.index = -1;
-                tempCameraInput.time = imuReadVectorCopy[i].time;
-                tempCameraInput.frame = cameraReadVectorCopy[indexCamera].frame;
-
-                for (size_t j = 0; j < frameMarkersDataVector[indexCamera].rvecs.size(); j++)
-                {
-                    cv::Vec3d rotVect0 = frameMarkersDataVector[indexCamera].rvecs[j];
-                    cv::Vec3d rotVect1 = frameMarkersDataVector[indexCamera + 1].rvecs[j];
-
-                    glm::quat quaternion0 = convertOpencvRotVectToQuat(rotVect0);
-                    glm::quat quaternion1 = convertOpencvRotVectToQuat(rotVect1);
-
-                    float relativePos = (float)(imuReadVectorCopy[i].time - cameraReadVectorCopy[indexCamera].time) /
-                                        (float)(cameraReadVectorCopy[indexCamera + 1].time - cameraReadVectorCopy[indexCamera].time);
-
-                    glm::quat interpolatedPoint = glm::slerp(quaternion0, quaternion1, relativePos);
-                    cv::Vec3d rotacionVec3 = convertQuatToOpencvRotVect(interpolatedPoint);
-
-                    tempFrameMarkersData.rvecs.push_back(rotacionVec3);
-                    tempFrameMarkersData.qvecs.push_back(cv::Vec4d(interpolatedPoint.w, interpolatedPoint.x, interpolatedPoint.y, interpolatedPoint.z));
-
-                    tempFrameMarkersData.tvecs.push_back(frameMarkersDataVector[indexCamera].tvecs[j]);
-                    tempFrameMarkersData.markerIds.push_back(frameMarkersDataVector[indexCamera].markerIds[j]);
-                }
-
-                tempCameraInterpolatedData.originalOrNot = 1;
-                tempCameraInterpolatedData.frame = tempCameraInput;
-                tempCameraInterpolatedData.frameMarkersData = tempFrameMarkersData;
-
-                interpolatedPoints.push_back(tempCameraInterpolatedData);
-
-                indexIMU = i + 1;
-            }
-            else if (imuReadVectorCopy[i].time > cameraReadVectorCopy[indexCamera + 1].time)
-                break;
-        }
-        indexCamera++;
-    }
-
-    return interpolatedPoints;
-}
-
-// Test interpolate camera rotation to fit IMU data.
-void testInterpolateCamera(std::vector<CameraInterpolatedData> interpolatedPoints)
-{
-    for (int i = 0; i < (int)interpolatedPoints.size(); i++)
-    {
-        for (size_t j = 0; j < interpolatedPoints[i].frameMarkersData.rvecs.size(); j++)
-        {
-            if (!std::isnan(interpolatedPoints[i].frameMarkersData.rvecs[j][0]))
-            {
-                std::cout << "Rvec: " << interpolatedPoints[i].frameMarkersData.rvecs[j] << std::endl;
-
-                cv::aruco::drawAxis(interpolatedPoints[i].frame.frame, cameraMatrix, distCoeffs, interpolatedPoints[i].frameMarkersData.rvecs[j],
-                                    interpolatedPoints[i].frameMarkersData.tvecs[j], 0.1);
-            }
-        }
-
-        cv::imshow("Test", interpolatedPoints[i].frame.frame);
-
-        cv::waitKey(1);
-    }
-    cv::destroyAllWindows();
-}
-
-void printIMUData()
-{
-    char filename[] = IMU_ADDRESS;
-    BNO055 sensors;
-    sensors.openDevice(filename);
-
-    WINDOW *win;
-    char buff[512];
-
-    win = initscr();
-    clearok(win, TRUE);
-
-    float maxX = 0.0;
-    float maxY = 0.0;
-    float maxZ = 0.0;
-
-    while (true)
-    {
-        sensors.readAll();
-        wmove(win, 5, 2);
-
-
-        float tempMaxX = sensors.accelVect.vi[0] * sensors.Scale;
-        float tempMaxY = sensors.accelVect.vi[1] * sensors.Scale;
-        float tempMaxZ = sensors.accelVect.vi[2] * sensors.Scale;
-
-        if (tempMaxX > maxX)
-            maxX = tempMaxX;
-        
-        if (tempMaxY > maxY)
-            maxY = tempMaxY;
-
-        if (tempMaxZ > maxZ)
-            maxZ = tempMaxZ;
-        
-
-        //snprintf(buff, 511, "Acc = {X=%f, Y=%f, Z=%f}", maxX, maxY, maxZ);
-
-        snprintf(buff, 79, "EULER=[%07.5lf, %07.5lf, %07.3lf]",
-            sensors.eOrientation.vi[0] * sensors.Scale * MATH_RAD_TO_DEGREE,
-            sensors.eOrientation.vi[1] * sensors.Scale * MATH_RAD_TO_DEGREE,
-            sensors.eOrientation.vi[2] * sensors.Scale * MATH_RAD_TO_DEGREE);
-      
-        waddstr(win, buff);
-
-        //sleep(1);
-
-        wrefresh(win);
-        wclear(win);
-    }
-    endwin();
-} 
 
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
-    bool preccessData = false;
+    bool preccessData = true;
     bool generateNewData = true;
     bool stopProgram = false;
-    bool ifCalibrateIMUOnly = true;
-    
+    bool ifCalibrateIMUOnly = false;
+
     timeIMUStart = std::chrono::steady_clock::now();
 
     if (ifCalibrateIMUOnly)
     {
         imuCalibration();
-        //printIMUData();
+        printIMUData();
     }
     else
     {
@@ -404,7 +173,7 @@ int main()
 
             cameraDataWrite(cameraFramesBuffer);
             //IMUDataWriteTestAxis();
-            //IMUDataJetsonWrite();
+            IMUDataJetsonWrite(imuDataJetsonBuffer);
         }
 
         if (preccessData)
@@ -418,15 +187,18 @@ int main()
             std::vector<ImuInputJetson> imuReadVectorCopy = imuReadVector;
             std::vector<CameraInput> cameraReadVectorCopy = hardCopyCameraVector(cameraReadVector);
 
-            std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(cameraReadVectorCopy);
+            std::vector<FrameMarkersData> frameMarkersDataVector = getRotationTraslationFromAllFrames(
+                cameraReadVector,
+                dictionary,
+                cameraMatrix,
+                distCoeffs);
 
             cameraRotationSlerpDataWrite(frameMarkersDataVector);
-
             std::vector<CameraInterpolatedData> interpolatedRotation = interpolateCameraRotation(imuReadVectorCopy, cameraReadVectorCopy, frameMarkersDataVector);
 
             cameraRotationSlerpDataWrite(interpolatedRotation);
 
-            // testInterpolateCamera(interpolatedRotation);
+            testInterpolateCamera(interpolatedRotation, cameraMatrix, distCoeffs);
 
             WINDOW *win;
             char buff[512];
@@ -519,11 +291,13 @@ int main()
                         waddstr(win, buff);
                     }
 
-                    FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame);
+                    FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame,
+                     dictionary, cameraMatrix, distCoeffs);
 
                     for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
                     {
-                        cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i], frameMarkersData.tvecs[i], 0.1);
+                        cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i],
+                         frameMarkersData.tvecs[i], 0.1);
                     }
 
                     cv::imshow("draw axis", frame.frame);

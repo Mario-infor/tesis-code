@@ -1,4 +1,8 @@
 INCLUDE_JETSON =./include
+OBJS_DIR = objs
+SRC_DIR = src
+BUILD_DIR = build
+LIB_DIR = lib
 
 CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include -I $(INCLUDE_JETSON)
 CC = g++
@@ -13,27 +17,34 @@ JETSON_LIBS =  `pkg-config --libs opencv4` -lncurses \
 
 LIB = libMario.a
 
+all: $(BUILD_DIR)/jetson $(BUILD_DIR)/readShow
 
-all: build/jetson
+$(BUILD_DIR)/jetson: $(OBJS_DIR)/jetson.o $(LIB_DIR)/libMario.a
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/jetson.o -L ./lib -lMario $(JETSON_LIBS)
 
+$(BUILD_DIR)/readShow: $(OBJS_DIR)/readShow.o
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/readShow.o $(JETSON_LIBS)
 
-build/jetson: objs/jetson.o lib/libMario.a
-	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ objs/jetson.o -L ./lib -lMario  $(JETSON_LIBS)
+$(OBJS_DIR)/jetson.o: $(SRC_DIR)/jetson.cpp include/jetson.h include/readWriteData.h include/utils.h include/structsFile.h include/RingBuffer.h 
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/jetson.cpp  
 
-objs/jetson.o: src/jetson.cpp include/jetson.h include/readWriteData.h include/utils.h include/structsFile.h include/RingBuffer.h 
-	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ src/jetson.cpp  
+$(OBJS_DIR)/readWriteData.o: $(SRC_DIR)/readWriteData.cpp include/readWriteData.h include/RingBuffer.h
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/readWriteData.cpp
 
-objs/readWriteData.o: src/readWriteData.cpp include/readWriteData.h include/RingBuffer.h
-	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ src/readWriteData.cpp
+$(OBJS_DIR)/utils.o: $(SRC_DIR)/utils.cpp include/utils.h include/structsFile.h
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/utils.cpp
 
-objs/utils.o: src/utils.cpp include/utils.h include/structsFile.h
-	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ src/utils.cpp
+$(OBJS_DIR)/interpolationUtils.o: $(SRC_DIR)/interpolationUtils.cpp include/interpolationUtils.h include/utils.h include/structsFile.h
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/interpolationUtils.cpp
 
-lib/libMario.a: objs/readWriteData.o objs/utils.o 
+$(OBJS_DIR)/readShow.o: $(SRC_DIR)/readShow.cpp include/readShow.h
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/readShow.cpp  
+
+lib/libMario.a: $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o $(OBJS_DIR)/interpolationUtils.o
 	ar rcs $@ $^	
 	ranlib $@
 
 
 .PHONY: clean
 clean:
-	rm -f objs/*.o build/jetson build/EKF build/readShow
+	rm -f $(OBJS_DIR)/*.o $(BUILD_DIR)/jetson $(BUILD_DIR)/EKF $(BUILD_DIR)/readShow

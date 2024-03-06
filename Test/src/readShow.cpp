@@ -2,16 +2,17 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
 #include <iostream>
-#include <BNO055-BBB_driver.h>
-
-// Struct to store information about each frame saved.
-struct CameraInput
-{
-    cv::Mat frame;
-};
+#include <readShow.h>
 
 // Pipeline for camera on JEtson Board.
-std::string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {
+std::string gstreamerPipelineReadShow (
+    int capture_width,
+    int capture_height,
+    int display_width,
+    int display_height,
+    int framerate,
+    int flip_method)
+{
     return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
            std::to_string(capture_height) + ", framerate=(fraction)" + std::to_string(framerate) +
            "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
@@ -37,7 +38,7 @@ int main(int argc, char **argv)
         int framerate = 30 ;
         int flip_method = 0 ;
 
-        std::string pipeline = gstreamer_pipeline(capture_width,
+        std::string pipeline = gstreamerPipelineReadShow(capture_width,
             capture_height,
             display_width,
             display_height,
