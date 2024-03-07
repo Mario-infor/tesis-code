@@ -14,6 +14,7 @@
 #include <jetson.h>
 #include <utils.h>
 #include <interpolationUtils.h>
+#include <cameraInfo.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -26,30 +27,22 @@ RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER
 // Buffer to store IMU structs.
 RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RING_BUFFER_LENGTH_IMU);
 
-
-cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 493.02975478, 0, 310.67004724,
-                        0, 495.25862058, 166.53292108,
-                        0, 0, 1);
-
-cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 0.12390713, 0.17792574, -0.00934536, -0.01052198, -1.13104202);
-
 void cameraCaptureThread()
 {
     int captureWidth = 800 ;
-        int captureHeight = 600 ;
-        int displayWidth = 800 ;
-        int displayHeight = 600 ;
-        int frameRate = 30 ;
-        int flipMethod = 0 ;
+    int captureHeight = 600 ;
+    int displayWidth = 800 ;
+    int displayHeight = 600 ;
+    int frameRate = 30 ;
+    int flipMethod = 0 ;
 
-    std::string pipeline = gstreamer_pipeline(captureWidth,
+    std::string pipeline = gstreamerPipeline(captureWidth,
             captureHeight,
             displayWidth,
             displayHeight,
             frameRate,
             flipMethod);
     
-
     cv::VideoCapture cap;
     cap.open(pipeline, cv::CAP_GSTREAMER);
 
@@ -144,12 +137,10 @@ void imuThreadJetson()
     }
 }
 
-
-
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
-    bool preccessData = true;
+    bool preccessData = false;
     bool generateNewData = true;
     bool stopProgram = false;
     bool ifCalibrateIMUOnly = false;
@@ -180,7 +171,8 @@ int main()
         {
             std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
             std::vector<CameraInput> cameraReadVector = readDataCamera();
-
+            
+            /*
             std::vector<glm::vec3> splinePoints = createSplinePoint(imuReadVector);
             std::vector<glm::quat> slerpPoints = createSlerpPoint(imuReadVector);
 
@@ -199,6 +191,7 @@ int main()
             cameraRotationSlerpDataWrite(interpolatedRotation);
 
             testInterpolateCamera(interpolatedRotation, cameraMatrix, distCoeffs);
+            */
 
             WINDOW *win;
             char buff[512];

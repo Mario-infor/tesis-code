@@ -1,17 +1,21 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <fstream>
+#include <iostream>
 #include <readWriteData.h>
 #include <RingBuffer.h>
 
-std::string dirCameraFolder = "./data/camera/";
-std::string dirIMUFolder = "./data/imu/";
-std::string dirRotationsFolder = "./data/rotations/";
+std::string dirCameraFolder = "../data/camera/";
+std::string dirIMUFolder = "../data/imu/";
+std::string dirRotationsFolder = "../data/rotations/";
 
 void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
 {
-    std::ofstream IMUTimeFile(dirIMUFolder + "IMUTime", std::ios::out);
-    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
+    std::string tempNameIMUTime = dirIMUFolder + "IMUTime";
+    std::string tempNameIMUData = dirIMUFolder + "IMUData";
+
+    std::ofstream IMUTimeFile(tempNameIMUTime, std::ios::out);
+    std::ofstream IMUDataFile(tempNameIMUData, std::ios::out);
 
     if (IMUTimeFile.is_open() && IMUDataFile.is_open())
     {
@@ -45,7 +49,8 @@ void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
 
 void IMUDataWriteTestAxis(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
 {
-    std::ofstream IMUDataFile(dirIMUFolder + "IMUData", std::ios::out);
+    std::string tempName = dirIMUFolder + "IMUData";
+    std::ofstream IMUDataFile(tempName, std::ios::out);
 
     if (IMUDataFile.is_open())
     {
@@ -59,12 +64,14 @@ void IMUDataWriteTestAxis(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
     }
 }
 
-
 std::vector<ImuInputJetson> readDataIMUJetson()
 {
+    std::string tempNameIMUTime = dirIMUFolder + "IMUTime";
+    std::string tempNameIMUData = dirIMUFolder + "IMUData";
+
     std::vector<ImuInputJetson> IMUData;
-    std::ifstream fileTime(dirIMUFolder + "IMUTime");
-    std::ifstream fileData(dirIMUFolder + "IMUData");
+    std::ifstream fileTime(tempNameIMUTime);
+    std::ifstream fileData(tempNameIMUData);
 
     if (!fileTime || !fileData)
         std::cerr << "Files not found." << std::endl;
@@ -102,10 +109,13 @@ std::vector<ImuInputJetson> readDataIMUJetson()
     return IMUData;
 }
 
-
 void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
 {
-    std::ofstream cameraTimeFile(dirCameraFolder + "cameraTime", std::ios::out);
+    std::string tempName = dirCameraFolder + "cameraTime";
+    std::ofstream cameraTimeFile(tempName, std::ios::out);
+
+    std::cout << "Writing camera data to file..." << std::endl;
+    std::cout << tempName << std::endl;
 
     if (cameraTimeFile.is_open())
     {
@@ -117,6 +127,7 @@ void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
             cameraFramesBuffer.Dequeue(tempFrame);
             snprintf(buff, 255, "frame_%06d.png", tempFrame.index);
             std::string imageName(buff);
+            std::cout << dirCameraFolder + imageName << std::endl;
             cv::imwrite(dirCameraFolder + imageName, tempFrame.frame);
 
             cameraTimeFile << tempFrame.time << std::endl;
@@ -124,11 +135,12 @@ void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
     }
 }
 
-
 std::vector<CameraInput> readDataCamera()
 {
+    std::string tempName = dirCameraFolder + "cameraTime";
+
     std::vector<CameraInput> cameraData;
-    std::ifstream fileTime(dirCameraFolder + "cameraTime");
+    std::ifstream fileTime(tempName);
 
     int index = 0;
     std::string imageName = "";
@@ -163,10 +175,15 @@ std::vector<CameraInput> readDataCamera()
 
 void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector)
 {
-    std::ofstream cameraRotationsFile1(dirRotationsFolder + "slerpRotations23.csv", std::ios::out);
-    std::ofstream cameraRotationsFile2(dirRotationsFolder + "slerpRotations30.csv", std::ios::out);
-    std::ofstream cameraRotationsFile3(dirRotationsFolder + "slerpRotations45.csv", std::ios::out);
-    std::ofstream cameraRotationsFile4(dirRotationsFolder + "slerpRotations80.csv", std::ios::out);
+    std::string tempName1 = dirRotationsFolder + "slerpRotations23.csv";
+    std::string tempName2 = dirRotationsFolder + "slerpRotations30.csv";
+    std::string tempName3 = dirRotationsFolder + "slerpRotations45.csv";
+    std::string tempName4 = dirRotationsFolder + "slerpRotations80.csv";
+
+    std::ofstream cameraRotationsFile1(tempName1, std::ios::out);
+    std::ofstream cameraRotationsFile2(tempName2, std::ios::out);
+    std::ofstream cameraRotationsFile3(tempName3, std::ios::out);
+    std::ofstream cameraRotationsFile4(tempName4, std::ios::out);
 
     if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
     {
@@ -196,10 +213,15 @@ void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSler
 
 void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsVector)
 {
-    std::ofstream cameraRotationsFile1(dirRotationsFolder + "rotations23.csv", std::ios::out);
-    std::ofstream cameraRotationsFile2(dirRotationsFolder + "rotations30.csv", std::ios::out);
-    std::ofstream cameraRotationsFile3(dirRotationsFolder + "rotations45.csv", std::ios::out);
-    std::ofstream cameraRotationsFile4(dirRotationsFolder + "rotations80.csv", std::ios::out);
+    std::string tempName1 = dirRotationsFolder + "rotations23.csv";
+    std::string tempName2 = dirRotationsFolder + "rotations30.csv";
+    std::string tempName3 = dirRotationsFolder + "rotations45.csv";
+    std::string tempName4 = dirRotationsFolder + "rotations80.csv";
+
+    std::ofstream cameraRotationsFile1(tempName1, std::ios::out);
+    std::ofstream cameraRotationsFile2(tempName2, std::ios::out);
+    std::ofstream cameraRotationsFile3(tempName3, std::ios::out);
+    std::ofstream cameraRotationsFile4(tempName4, std::ios::out);
 
     if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
     {

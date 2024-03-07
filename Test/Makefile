@@ -17,7 +17,7 @@ JETSON_LIBS =  `pkg-config --libs opencv4` -lncurses \
 
 LIB = libMario.a
 
-all: $(BUILD_DIR)/jetson $(BUILD_DIR)/readShow
+all: $(BUILD_DIR)/jetson $(BUILD_DIR)/readShow $(BUILD_DIR)/EKF
 
 $(BUILD_DIR)/jetson: $(OBJS_DIR)/jetson.o $(LIB_DIR)/libMario.a
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/jetson.o -L ./lib -lMario $(JETSON_LIBS)
@@ -25,8 +25,11 @@ $(BUILD_DIR)/jetson: $(OBJS_DIR)/jetson.o $(LIB_DIR)/libMario.a
 $(BUILD_DIR)/readShow: $(OBJS_DIR)/readShow.o
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/readShow.o $(JETSON_LIBS)
 
-$(OBJS_DIR)/jetson.o: $(SRC_DIR)/jetson.cpp include/jetson.h include/readWriteData.h include/utils.h include/structsFile.h include/RingBuffer.h 
-	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/jetson.cpp  
+$(BUILD_DIR)/EKF: $(OBJS_DIR)/EKF.o $(LIB_DIR)/libMario.a
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/EKF.o -L ./lib -lMario $(JETSON_LIBS)
+
+$(OBJS_DIR)/jetson.o: $(SRC_DIR)/jetson.cpp include/jetson.h include/cameraInfo.h include/readWriteData.h include/utils.h include/structsFile.h include/RingBuffer.h 
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/jetson.cpp
 
 $(OBJS_DIR)/readWriteData.o: $(SRC_DIR)/readWriteData.cpp include/readWriteData.h include/RingBuffer.h
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/readWriteData.cpp
@@ -38,7 +41,10 @@ $(OBJS_DIR)/interpolationUtils.o: $(SRC_DIR)/interpolationUtils.cpp include/inte
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/interpolationUtils.cpp
 
 $(OBJS_DIR)/readShow.o: $(SRC_DIR)/readShow.cpp include/readShow.h
-	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/readShow.cpp  
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/readShow.cpp
+
+$(OBJS_DIR)/EKF.o: $(SRC_DIR)/EKF.cpp include/EKF.h include/utils.h include/structsFile.h include/cameraInfo.h include/readWriteData.h
+	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/EKF.cpp
 
 lib/libMario.a: $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o $(OBJS_DIR)/interpolationUtils.o
 	ar rcs $@ $^	
