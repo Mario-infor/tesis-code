@@ -1,13 +1,16 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/aruco.hpp>
+#include <opencv2/calib3d.hpp>
 #include <fstream>
 #include <iostream>
+#include <unistd.h>
 #include <readWriteData.h>
 #include <RingBuffer.h>
 
-std::string dirCameraFolder = "../data/camera/";
-std::string dirIMUFolder = "../data/imu/";
-std::string dirRotationsFolder = "../data/rotations/";
+std::string dirCameraFolder = "./data/camera/";
+std::string dirIMUFolder = "./data/imu/";
+std::string dirRotationsFolder = "./data/rotations/";
 
 void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
 {
@@ -69,6 +72,9 @@ std::vector<ImuInputJetson> readDataIMUJetson()
     std::string tempNameIMUTime = dirIMUFolder + "IMUTime";
     std::string tempNameIMUData = dirIMUFolder + "IMUData";
 
+    std::cout << "Searching IMU times at: " << tempNameIMUTime << std::endl;
+    std::cout << "Searching IMU data at: " << tempNameIMUTime << std::endl;
+
     std::vector<ImuInputJetson> IMUData;
     std::ifstream fileTime(tempNameIMUTime);
     std::ifstream fileData(tempNameIMUData);
@@ -114,7 +120,6 @@ void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
     std::string tempName = dirCameraFolder + "cameraTime";
     std::ofstream cameraTimeFile(tempName, std::ios::out);
 
-    std::cout << "Writing camera data to file..." << std::endl;
     std::cout << tempName << std::endl;
 
     if (cameraTimeFile.is_open())
@@ -138,9 +143,9 @@ void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
 std::vector<CameraInput> readDataCamera()
 {
     std::string tempName = dirCameraFolder + "cameraTime";
-
+    std::string debug = "../data/camera/";
     std::vector<CameraInput> cameraData;
-    std::ifstream fileTime(tempName);
+    std::ifstream fileTime(debug + "cameraTime");
 
     int index = 0;
     std::string imageName = "";
@@ -160,15 +165,17 @@ std::vector<CameraInput> readDataCamera()
             tempCameraInput.index = index;
 
             snprintf(buff, 255, "frame_%06d.png", tempCameraInput.index);
-            // imageName = "frame_" + std::to_string(index) + ".png";
             std::string imageName(buff);
-            image = cv::imread(dirCameraFolder + imageName, cv::IMREAD_GRAYSCALE);
+            image = cv::imread(debug + imageName, cv::IMREAD_GRAYSCALE);
+            
             image.copyTo(tempCameraInput.frame);
 
             cameraData.push_back(tempCameraInput);
             index++;
         }
     }
+
+    std::cout << "Exit readDataCamera method."<< std::endl;
 
     return cameraData;
 }

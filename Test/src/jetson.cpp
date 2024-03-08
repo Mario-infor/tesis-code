@@ -72,6 +72,7 @@ void cameraCaptureThread()
                     CameraInput capture;
                     capture.index = index;
                     capture.frame = grayscale.clone();
+                    //capture.frame = frame.clone();
                     capture.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count();
 
                     cameraFramesBuffer.Queue(capture);
@@ -137,20 +138,217 @@ void imuThreadJetson()
     }
 }
 
+void initKalmanFilter(cv::KalmanFilter &KF)
+{
+    KF.statePre.at<float>(0) = 0;  // x traslation.
+    KF.statePre.at<float>(1) = 0;  // y traslation.
+    KF.statePre.at<float>(2) = 0;  // z traslation.
+    KF.statePre.at<float>(3) = 0;  // w quat rotation.
+    KF.statePre.at<float>(4) = 0;  // x quat rotation.
+    KF.statePre.at<float>(5) = 0;  // y quat rotation.
+    KF.statePre.at<float>(6) = 0;  // z quat rotation.
+    KF.statePre.at<float>(7) = 0;  // x traslation velocity.
+    KF.statePre.at<float>(8) = 0;  // y traslation velocity.
+    KF.statePre.at<float>(9) = 0;  // z traslation velocity.
+    KF.statePre.at<float>(10) = 0; // w rotation velocity.
+    KF.statePre.at<float>(11) = 0; // x rotation velocity.
+    KF.statePre.at<float>(12) = 0; // y rotation velocity.
+    KF.statePre.at<float>(13) = 0; // z rotation velocity.
+
+    cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));     // Q.
+    cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2)); // R.
+    cv::setIdentity(KF.errorCovPost, cv::Scalar::all(1));           // P'.
+    cv::setIdentity(KF.transitionMatrix, cv::Scalar::all(1));       // A.
+}
+
+void predict(cv::KalmanFilter &KF)
+{
+    KF.statePre = KF.transitionMatrix * KF.statePost;
+    KF.errorCovPre = KF.transitionMatrix * KF.errorCovPost * KF.transitionMatrix.t() + KF.processNoiseCov;
+}
+
+void doMeasurement(cv::Mat_<float> &measurement, cv::Mat_<float> measurementOld,
+FrameMarkersData frameMarkersData, float deltaT)
+{
+    measurement(0) = frameMarkersData.tvecs[0].val[0]; // traslation (x)
+    measurement(1) = frameMarkersData.tvecs[0].val[1]; // traslation (y)
+    measurement(2) = frameMarkersData.tvecs[0].val[2]; // traslation (z)
+    measurement(3) = frameMarkersData.qvecs[0].val[0]; // quaternion (w)
+    measurement(4) = frameMarkersData.qvecs[0].val[1]; // quaternion (x)
+    measurement(5) = frameMarkersData.qvecs[0].val[2]; // quaternion (y)
+    measurement(6) = frameMarkersData.qvecs[0].val[3]; // quaternion (z)
+
+    measurement(7) = (measurement(0) - measurementOld(0)) / deltaT; // traslation speed (x)
+    measurement(8) = (measurement(1) - measurementOld(1)) / deltaT; // traslation speed (y)
+    measurement(9) = (measurement(2) - measurementOld(2)) / deltaT; // traslation speed (z)
+    measurement(10) = (measurement(3) - measurementOld(3)) / deltaT; // quaternion speed (w)
+    measurement(11) = (measurement(4) - measurementOld(4)) / deltaT; // quaternion speed (x)
+    measurement(12) = (measurement(5) - measurementOld(5)) / deltaT; // quaternion speed (y)
+    measurement(13) = (measurement(6) - measurementOld(6)) / deltaT; // quaternion speed (z)    
+}
+
+void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
+{
+    //cv::Mat_<float> y = measurement - KF.statePre;
+    cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
+    KF.gain = KF.errorCovPre * KF.measurementMatrix.t() * S.inv();
+
+    int stateSize = KF.statePre.rows;
+
+    KF.statePost = KF.statePre + KF.gain * (measurement - KF.statePre);
+    KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * KF.measurementMatrix) * KF.errorCovPre;
+}
+
+void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
+{
+    KF.transitionMatrix =
+        (cv::Mat_<float>(14, 14) << 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
+         0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+         0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+         0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+         0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
+         0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0,
+         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT,
+         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+}
+
+void updateMeasurementMatrix(cv::KalmanFilter &KF)
+{
+    KF.measurementMatrix =
+        (cv::Mat_<float>(14, 14) <<
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+}
+
+void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
+{
+    KF.statePost = KF.statePre;
+    /*
+    KF.statePost.at<float>(0) = measurement.at<float>(0);
+    KF.statePost.at<float>(1) = measurement.at<float>(1);
+    KF.statePost.at<float>(2) = measurement.at<float>(2);
+    KF.statePost.at<float>(3) = quaternion.w;
+    KF.statePost.at<float>(4) = quaternion.x;
+    KF.statePost.at<float>(5) = quaternion.y;
+    KF.statePost.at<float>(6) = quaternion.z;*/
+}
+
+void runKalmanFilter()
+{
+    bool firstRun = true;
+    float deltaT = 10;
+    cv::KalmanFilter KF(14, 14, 0);
+
+    // Create measurement vector (traslation, quaternion, speeds).
+    cv::Mat_<float> measurement(14, 1);
+    measurement.setTo(cv::Scalar(0));
+
+    // Create old measurement to calculate speeds.
+    cv::Mat_<float> measurementOld(14, 1);
+    measurementOld.setTo(cv::Scalar(0));
+
+    // Initialize Kalman Filter.
+    initKalmanFilter(KF);
+
+    std::vector<CameraInput> cameraData = readDataCamera();
+
+    for (size_t i = 0; i < cameraData.size(); i++)
+    {
+        CameraInput tempCameraData = cameraData.at(i);
+
+        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
+         dictionary, cameraMatrix, distCoeffs);
+
+        cv::Vec3d rotVect = cv::Vec3d(frameMarkersData.rvecs[0][0],
+                                    frameMarkersData.rvecs[0][1],
+                                    frameMarkersData.rvecs[0][2]);
+
+        glm::quat quaternion = convertOpencvRotVectToQuat(rotVect);
+
+        frameMarkersData.qvecs.push_back(cv::Vec4d(quaternion.w, quaternion.x, quaternion.y, quaternion.z));
+
+        if (!firstRun)
+        {
+            predict(KF);
+
+            std::cout << "statePre: " << KF.statePre << std::endl << std::endl;
+
+            deltaT = tempCameraData.time;
+            updateTransitionMatrix(KF, deltaT);
+            updateMeasurementMatrix(KF);
+
+            doMeasurement(measurement, measurementOld, frameMarkersData, deltaT);
+            measurementOld = measurement.clone();
+
+            std::cout << "measurement: " << measurement << std::endl << std::endl;
+
+            correct(KF, measurement);
+            
+            std::cout << "statePost: " << KF.statePost << std::endl << std::endl;
+            
+            drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
+                             tempCameraData.frame, cameraMatrix, distCoeffs);
+            
+
+            glm::quat tempQuat = glm::quat(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
+                                           KF.statePost.at<float>(5), KF.statePost.at<float>(6));
+
+            cv::Vec3d tempRvec = convertQuatToOpencvRotVect(tempQuat);
+            cv::Vec3d tempTvec = cv::Vec3d(KF.statePost.at<float>(0), KF.statePost.at<float>(1),
+                                             KF.statePost.at<float>(2));
+
+            std::vector<cv::Vec3d> tempRvecs = {tempRvec};
+            std::vector<cv::Vec3d> tempTvecs = {tempTvec};
+
+            drawAxisOnFrame(tempRvecs, tempTvecs, tempCameraData.frame, cameraMatrix, distCoeffs);
+
+            cv::waitKey(33);
+        }
+        else
+        {   
+            doMeasurement(measurement, measurementOld, frameMarkersData, deltaT);
+            measurementOld = measurement.clone();
+            //initStatePostFirstTime(KF, measurement);
+            KF.statePost = measurement.clone();
+            firstRun = false;
+        }
+    }
+}
+
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
-    bool preccessData = false;
-    bool generateNewData = true;
+    bool generateNewData = false;
+    bool preccessData = true;
     bool stopProgram = false;
     bool ifCalibrateIMUOnly = false;
+    bool runKalmanFilterBool = true;
 
     timeIMUStart = std::chrono::steady_clock::now();
 
     if (ifCalibrateIMUOnly)
     {
         imuCalibration();
-        printIMUData();
+        //printIMUData();
+    }
+    else if (runKalmanFilterBool)
+    {
+        runKalmanFilter();
     }
     else
     {
@@ -287,13 +485,8 @@ int main()
                     FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame,
                      dictionary, cameraMatrix, distCoeffs);
 
-                    for (int i = 0; i < (int)frameMarkersData.rvecs.size(); i++)
-                    {
-                        cv::aruco::drawAxis(frame.frame, cameraMatrix, distCoeffs, frameMarkersData.rvecs[i],
-                         frameMarkersData.tvecs[i], 0.1);
-                    }
-
-                    cv::imshow("draw axis", frame.frame);
+                    drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
+                                     frame.frame, cameraMatrix, distCoeffs);
                 }
 
                 cv::waitKey(33);

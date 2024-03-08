@@ -43,14 +43,13 @@ $(OBJS_DIR)/interpolationUtils.o: $(SRC_DIR)/interpolationUtils.cpp include/inte
 $(OBJS_DIR)/readShow.o: $(SRC_DIR)/readShow.cpp include/readShow.h
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/readShow.cpp
 
-$(OBJS_DIR)/EKF.o: $(SRC_DIR)/EKF.cpp include/EKF.h include/utils.h include/structsFile.h include/cameraInfo.h include/readWriteData.h
+$(OBJS_DIR)/EKF.o: $(SRC_DIR)/EKF.cpp include/EKF.h include/utils.h include/cameraInfo.h include/readWriteData.h
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/EKF.cpp
 
 lib/libMario.a: $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o $(OBJS_DIR)/interpolationUtils.o
 	ar rcs $@ $^	
 	ranlib $@
 
-
 .PHONY: clean
 clean:
-	rm -f $(OBJS_DIR)/*.o $(BUILD_DIR)/jetson $(BUILD_DIR)/EKF $(BUILD_DIR)/readShow
+	rm -f $(OBJS_DIR)/*.o $(LIB_DIR)/*.a $(BUILD_DIR)/jetson $(BUILD_DIR)/EKF $(BUILD_DIR)/readShow

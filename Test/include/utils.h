@@ -38,4 +38,11 @@ FrameMarkersData getRotationTraslationFromFrame(
 // Prints Euler or Accel data from the IMU to the console.
 void printIMUData();
 
+void drawAxisOnFrame(
+    std::vector<cv::Vec3d> rvecs,
+    std::vector<cv::Vec3d> tvecs,
+    cv::Mat frame,
+    cv::Mat cameraMatrix,
+    cv::Mat distCoeffs);
+
 #endif // UTILS_H

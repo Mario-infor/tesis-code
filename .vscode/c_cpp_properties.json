@@ -7,7 +7,7 @@
                 "/usr/local/include",
                 "/usr/include",
                 "/usr/local/include/opencv4/**",
-                "/usr/include/opencv4",
+                //"/usr/include/opencv4",
                 "~/Mario/BNO055-BBB_IMU-Driver/include",
                 "~/Mario/tesis-code/Test/include"
             ],

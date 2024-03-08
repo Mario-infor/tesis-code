@@ -1,7 +1,14 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/aruco.hpp>
+#include <opencv2/calib3d.hpp>
 #include <EKF.h>
 #include <readWriteData.h>
 #include <utils.h>
 #include <cameraInfo.h>
+#include <iostream>
+#include <fstream>
+#include <structsFile.h>
 
 void initKalmanFilter(cv::KalmanFilter &KF)
 {
@@ -32,16 +39,8 @@ void predict(cv::KalmanFilter &KF)
     KF.errorCovPre = KF.transitionMatrix * KF.errorCovPost * KF.transitionMatrix.t() + KF.processNoiseCov;
 }
 
-void doMeasurement(
-    cv::Mat_<float> &measurement,
-    CameraInput frame,
-    cv::Ptr<cv::aruco::Dictionary> dictionary,
-    cv::Mat cameraMatrix,
-    cv::Mat distCoeffs)
+void doMeasurement(cv::Mat_<float> &measurement, FrameMarkersData frameMarkersData)
 {
-    FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame,
-                     dictionary, cameraMatrix, distCoeffs);
-
     measurement(0) = frameMarkersData.tvecs[0].val[0]; // tvec.x;
     measurement(1) = frameMarkersData.tvecs[0].val[1]; // tvec.y;
     measurement(2) = frameMarkersData.tvecs[0].val[2]; // tvec.z;
@@ -50,7 +49,7 @@ void doMeasurement(
     measurement(5) = frameMarkersData.rvecs[0].val[2]; // rvec.z;
 }
 
-void correct(cv::KalmanFilter &KF, cv::Mat_<float> &measurement)
+void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
 {
     cv::Mat_<float> y = measurement - KF.statePre;
     cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
@@ -64,6 +63,8 @@ void correct(cv::KalmanFilter &KF, cv::Mat_<float> &measurement)
 
 void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
 {
+
+
     KF.transitionMatrix =
         (cv::Mat_<float>(14, 14) << 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
          0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
@@ -81,7 +82,8 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
 void updateMeasurementMatrix(cv::KalmanFilter &KF)
 {
     KF.measurementMatrix =
-        (cv::Mat_<float>(6, 14) << 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        (cv::Mat_<float>(6, 14) <<
+         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
          0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
          0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
          0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -122,22 +124,30 @@ int main()
 
     for (size_t i = 0; i < cameraData.size(); i++)
     {
-        CameraInput tempCameraData = cameraData[i];
+        CameraInput tempCameraData = cameraData.at(i);
+
+        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
+         dictionary, cameraMatrix, distCoeffs);
 
         if (!firstRun)
         {
             predict(KF);
 
+            deltaT = tempCameraData.time;
             updateTransitionMatrix(KF, deltaT);
             updateMeasurementMatrix(KF);
 
-            doMeasurement(measurement, tempCameraData, dictionary, cameraMatrix, distCoeffs);
+            doMeasurement(measurement, frameMarkersData);
 
             correct(KF, measurement);
+
+            drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
+                                tempCameraData.frame, cameraMatrix, distCoeffs);
+            cv::waitKey(33);
         }
         else
         {
-            doMeasurement(measurement, tempCameraData, dictionary, cameraMatrix, distCoeffs);
+            doMeasurement(measurement, frameMarkersData);
             initStatePostFirstTime(KF, measurement);
             firstRun = false;
         }
