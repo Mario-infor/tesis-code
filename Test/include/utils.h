@@ -43,6 +43,7 @@ void drawAxisOnFrame(
     std::vector<cv::Vec3d> tvecs,
     cv::Mat frame,
     cv::Mat cameraMatrix,
-    cv::Mat distCoeffs);
+    cv::Mat distCoeffs,
+    std::string windowTitle);
 
 #endif // UTILS_H

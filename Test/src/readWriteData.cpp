@@ -8,9 +8,9 @@
 #include <readWriteData.h>
 #include <RingBuffer.h>
 
-std::string dirCameraFolder = "./data/camera/";
-std::string dirIMUFolder = "./data/imu/";
-std::string dirRotationsFolder = "./data/rotations/";
+std::string dirCameraFolder = "/home/nvidia/Mario/tesis-code/Test/data/camera/";
+std::string dirIMUFolder = "/home/nvidia/Mario/tesis-code/Test/data/imu/";
+std::string dirRotationsFolder = "/home/nvidia/Mario/tesis-code/Test/data/rotations/";
 
 void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
 {
@@ -142,10 +142,8 @@ void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer)
 
 std::vector<CameraInput> readDataCamera()
 {
-    std::string tempName = dirCameraFolder + "cameraTime";
-    std::string debug = "../data/camera/";
     std::vector<CameraInput> cameraData;
-    std::ifstream fileTime(debug + "cameraTime");
+    std::ifstream fileTime(dirCameraFolder + "cameraTime");
 
     int index = 0;
     std::string imageName = "";
@@ -166,7 +164,7 @@ std::vector<CameraInput> readDataCamera()
 
             snprintf(buff, 255, "frame_%06d.png", tempCameraInput.index);
             std::string imageName(buff);
-            image = cv::imread(debug + imageName, cv::IMREAD_GRAYSCALE);
+            image = cv::imread(dirCameraFolder + imageName, cv::IMREAD_GRAYSCALE);
             
             image.copyTo(tempCameraInput.frame);
 

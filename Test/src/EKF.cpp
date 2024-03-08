@@ -142,7 +142,7 @@ int main()
             correct(KF, measurement);
 
             drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
-                                tempCameraData.frame, cameraMatrix, distCoeffs);
+                                tempCameraData.frame, cameraMatrix, distCoeffs, "Frame");
             cv::waitKey(33);
         }
         else

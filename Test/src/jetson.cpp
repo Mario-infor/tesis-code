@@ -143,17 +143,16 @@ void initKalmanFilter(cv::KalmanFilter &KF)
     KF.statePre.at<float>(0) = 0;  // x traslation.
     KF.statePre.at<float>(1) = 0;  // y traslation.
     KF.statePre.at<float>(2) = 0;  // z traslation.
-    KF.statePre.at<float>(3) = 0;  // w quat rotation.
-    KF.statePre.at<float>(4) = 0;  // x quat rotation.
-    KF.statePre.at<float>(5) = 0;  // y quat rotation.
-    KF.statePre.at<float>(6) = 0;  // z quat rotation.
-    KF.statePre.at<float>(7) = 0;  // x traslation velocity.
-    KF.statePre.at<float>(8) = 0;  // y traslation velocity.
-    KF.statePre.at<float>(9) = 0;  // z traslation velocity.
-    KF.statePre.at<float>(10) = 0; // w rotation velocity.
-    KF.statePre.at<float>(11) = 0; // x rotation velocity.
-    KF.statePre.at<float>(12) = 0; // y rotation velocity.
-    KF.statePre.at<float>(13) = 0; // z rotation velocity.
+    KF.statePre.at<float>(3) = 0;  // x rotation.
+    KF.statePre.at<float>(4) = 0;  // y rotation.
+    KF.statePre.at<float>(5) = 0;  // z rotation.
+    KF.statePre.at<float>(6) = 0;  // x traslation velocity.
+    KF.statePre.at<float>(7) = 0;  // y traslation velocity.
+    KF.statePre.at<float>(8) = 0;  // z traslation velocity.
+    KF.statePre.at<float>(9) = 0;  // x rotation velocity.
+    KF.statePre.at<float>(10) = 0; // y rotation velocity.
+    KF.statePre.at<float>(11) = 0; // z rotation velocity.
+    
 
     cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));     // Q.
     cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2)); // R.
@@ -173,18 +172,16 @@ FrameMarkersData frameMarkersData, float deltaT)
     measurement(0) = frameMarkersData.tvecs[0].val[0]; // traslation (x)
     measurement(1) = frameMarkersData.tvecs[0].val[1]; // traslation (y)
     measurement(2) = frameMarkersData.tvecs[0].val[2]; // traslation (z)
-    measurement(3) = frameMarkersData.qvecs[0].val[0]; // quaternion (w)
-    measurement(4) = frameMarkersData.qvecs[0].val[1]; // quaternion (x)
-    measurement(5) = frameMarkersData.qvecs[0].val[2]; // quaternion (y)
-    measurement(6) = frameMarkersData.qvecs[0].val[3]; // quaternion (z)
+    measurement(3) = frameMarkersData.rvecs[0].val[0]; // rotation (x)
+    measurement(4) = frameMarkersData.rvecs[0].val[1]; // rotation (y)
+    measurement(5) = frameMarkersData.rvecs[0].val[2]; // rotation (z)
 
-    measurement(7) = (measurement(0) - measurementOld(0)) / deltaT; // traslation speed (x)
-    measurement(8) = (measurement(1) - measurementOld(1)) / deltaT; // traslation speed (y)
-    measurement(9) = (measurement(2) - measurementOld(2)) / deltaT; // traslation speed (z)
-    measurement(10) = (measurement(3) - measurementOld(3)) / deltaT; // quaternion speed (w)
-    measurement(11) = (measurement(4) - measurementOld(4)) / deltaT; // quaternion speed (x)
-    measurement(12) = (measurement(5) - measurementOld(5)) / deltaT; // quaternion speed (y)
-    measurement(13) = (measurement(6) - measurementOld(6)) / deltaT; // quaternion speed (z)    
+    measurement(6) = (measurement(0) - measurementOld(0)) / deltaT; // traslation speed (x)
+    measurement(7) = (measurement(1) - measurementOld(1)) / deltaT; // traslation speed (y)
+    measurement(8) = (measurement(2) - measurementOld(2)) / deltaT; // traslation speed (z)
+    measurement(9) = (measurement(3) - measurementOld(3)) / deltaT; // rotation speed (x)
+    measurement(10) = (measurement(4) - measurementOld(4)) / deltaT; // rotation speed (y)
+    measurement(11) = (measurement(5) - measurementOld(5)) / deltaT; // rotation speed (z)    
 }
 
 void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
@@ -202,37 +199,37 @@ void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
 void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
 {
     KF.transitionMatrix =
-        (cv::Mat_<float>(14, 14) << 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
-         0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
-         0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
-         0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
-         0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
-         0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0,
-         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT,
-         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+        (cv::Mat_<float>(12, 12) << 
+        1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0,
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0,
+        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 
+        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 }
 
 void updateMeasurementMatrix(cv::KalmanFilter &KF)
 {
     KF.measurementMatrix =
-        (cv::Mat_<float>(14, 14) <<
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        (cv::Mat_<float>(12, 12) <<
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 }
 
 void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
@@ -252,14 +249,14 @@ void runKalmanFilter()
 {
     bool firstRun = true;
     float deltaT = 10;
-    cv::KalmanFilter KF(14, 14, 0);
+    cv::KalmanFilter KF(12, 12, 0);
 
     // Create measurement vector (traslation, quaternion, speeds).
-    cv::Mat_<float> measurement(14, 1);
+    cv::Mat_<float> measurement(12, 1);
     measurement.setTo(cv::Scalar(0));
 
     // Create old measurement to calculate speeds.
-    cv::Mat_<float> measurementOld(14, 1);
+    cv::Mat_<float> measurementOld(12, 1);
     measurementOld.setTo(cv::Scalar(0));
 
     // Initialize Kalman Filter.
@@ -274,6 +271,7 @@ void runKalmanFilter()
         FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
          dictionary, cameraMatrix, distCoeffs);
 
+        /*
         cv::Vec3d rotVect = cv::Vec3d(frameMarkersData.rvecs[0][0],
                                     frameMarkersData.rvecs[0][1],
                                     frameMarkersData.rvecs[0][2]);
@@ -281,6 +279,7 @@ void runKalmanFilter()
         glm::quat quaternion = convertOpencvRotVectToQuat(rotVect);
 
         frameMarkersData.qvecs.push_back(cv::Vec4d(quaternion.w, quaternion.x, quaternion.y, quaternion.z));
+        */
 
         if (!firstRun)
         {
@@ -302,20 +301,24 @@ void runKalmanFilter()
             std::cout << "statePost: " << KF.statePost << std::endl << std::endl;
             
             drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
-                             tempCameraData.frame, cameraMatrix, distCoeffs);
+                             tempCameraData.frame, cameraMatrix, distCoeffs, "Original");
             
-
+            /*
             glm::quat tempQuat = glm::quat(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
                                            KF.statePost.at<float>(5), KF.statePost.at<float>(6));
 
             cv::Vec3d tempRvec = convertQuatToOpencvRotVect(tempQuat);
             cv::Vec3d tempTvec = cv::Vec3d(KF.statePost.at<float>(0), KF.statePost.at<float>(1),
                                              KF.statePost.at<float>(2));
+            */
+            
+            std::vector<cv::Vec3d> tempTvecs = {cv::Vec3d(KF.statePost.at<float>(0), KF.statePost.at<float>(1),
+                                             KF.statePost.at<float>(2))};
 
-            std::vector<cv::Vec3d> tempRvecs = {tempRvec};
-            std::vector<cv::Vec3d> tempTvecs = {tempTvec};
+            std::vector<cv::Vec3d> tempRvecs = {cv::Vec3d(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
+                                             KF.statePost.at<float>(5))};
 
-            drawAxisOnFrame(tempRvecs, tempTvecs, tempCameraData.frame, cameraMatrix, distCoeffs);
+            drawAxisOnFrame(tempRvecs, tempTvecs, tempCameraData.frame, cameraMatrix, distCoeffs, "EKF");
 
             cv::waitKey(33);
         }
@@ -486,7 +489,7 @@ int main()
                      dictionary, cameraMatrix, distCoeffs);
 
                     drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
-                                     frame.frame, cameraMatrix, distCoeffs);
+                                     frame.frame, cameraMatrix, distCoeffs, "Jetson");
                 }
 
                 cv::waitKey(33);

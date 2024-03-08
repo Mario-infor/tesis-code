@@ -152,12 +152,13 @@ void drawAxisOnFrame(
     std::vector<cv::Vec3d> tvecs,
     cv::Mat frame,
     cv::Mat cameraMatrix,
-    cv::Mat distCoeffs)
+    cv::Mat distCoeffs,
+    std::string windowTitle)
 {
     for (int i = 0; i < (int)rvecs.size(); i++)
     {
         cv::aruco::drawAxis(frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
     }
 
-    cv::imshow("draw axis", frame);
+    cv::imshow(windowTitle, frame);
 }
