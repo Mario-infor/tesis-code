@@ -5,3 +5,6 @@ IMUTime
 *.png
 *.dat
 *.csv
+*.o
+*.a
+*.out
