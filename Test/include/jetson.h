@@ -15,14 +15,6 @@ std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 
 bool doneCalibrating = false;
 
-// Pipeline for camera on Jetson Board.
-std::string gstreamerPipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {
-    return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
-           std::to_string(capture_height) + ", framerate=(fraction)" + std::to_string(framerate) +
-           "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
-           std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
-}
-
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread();
 
@@ -47,5 +39,8 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 
 // Initialisation of statePost the first time when no prediction have been made.
 void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
+
+// Method to predict the next state of the imu data.
+void imuPreintegration();
 
 #endif // JETSON_H

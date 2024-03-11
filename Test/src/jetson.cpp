@@ -15,6 +15,8 @@
 #include <utils.h>
 #include <interpolationUtils.h>
 #include <cameraInfo.h>
+#include <eigen3/Eigen/Core>
+#include <eigen3/Eigen/Geometry>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -29,19 +31,12 @@ RingBuffer<ImuInputJetson> imuDataJetsonBuffer = RingBuffer<ImuInputJetson>(RING
 
 void cameraCaptureThread()
 {
-    int captureWidth = 800 ;
-    int captureHeight = 600 ;
-    int displayWidth = 800 ;
-    int displayHeight = 600 ;
-    int frameRate = 30 ;
-    int flipMethod = 0 ;
-
-    std::string pipeline = gstreamerPipeline(captureWidth,
-            captureHeight,
-            displayWidth,
-            displayHeight,
-            frameRate,
-            flipMethod);
+    std::string pipeline = gstreamerPipeline(FRAME_WIDTH,
+            FRAME_HEIGHT,
+            FRAME_WIDTH,
+            FRAME_HEIGHT,
+            FRAME_RATE,
+            FLIP_METHOD);
     
     cv::VideoCapture cap;
     cap.open(pipeline, cv::CAP_GSTREAMER);
@@ -244,6 +239,18 @@ void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
     KF.statePost.at<float>(5) = quaternion.y;
     KF.statePost.at<float>(6) = quaternion.z;*/
 }
+
+/*
+void imuPrediction(const float deltaT)
+{
+    // Eigen::Matrix3d dR = Sophus::SO3::exp(omega*delta_t).matrix();
+
+    deltaPos += delta_v_* deltaT + 0.5 * delta_rot_ * acc *dt2;
+    deltaVel += delta_rot_ * acc * deltaT;
+    deltaRot = NormalizeRotationM(delta_rot_ * dR);
+    delta_time_ += deltaT;
+}
+*/
 
 void runKalmanFilter()
 {

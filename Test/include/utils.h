@@ -46,4 +46,6 @@ void drawAxisOnFrame(
     cv::Mat distCoeffs,
     std::string windowTitle);
 
+cv::Mat wHat(const cv::Vec3d v);
+
 #endif // UTILS_H

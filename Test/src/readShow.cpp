@@ -3,21 +3,7 @@
 #include <opencv2/aruco.hpp>
 #include <iostream>
 #include <readShow.h>
-
-// Pipeline for camera on JEtson Board.
-std::string gstreamerPipelineReadShow (
-    int capture_width,
-    int capture_height,
-    int display_width,
-    int display_height,
-    int framerate,
-    int flip_method)
-{
-    return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
-           std::to_string(capture_height) + ", framerate=(fraction)" + std::to_string(framerate) +
-           "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
-           std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
-}
+#include <cameraInfo.h>
 
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main(int argc, char **argv)
@@ -31,19 +17,12 @@ int main(int argc, char **argv)
             stopProgram = true;
         }
 
-        int capture_width = 800 ;
-        int capture_height = 600 ;
-        int display_width = 800 ;
-        int display_height = 600 ;
-        int framerate = 30 ;
-        int flip_method = 0 ;
-
-        std::string pipeline = gstreamerPipelineReadShow(capture_width,
-            capture_height,
-            display_width,
-            display_height,
-            framerate,
-            flip_method);
+        std::string pipeline = gstreamerPipeline(FRAME_WIDTH,
+            FRAME_HEIGHT,
+            FRAME_WIDTH,
+            FRAME_HEIGHT,
+            FRAME_RATE,
+            FLIP_METHOD);
 
         cv::VideoCapture cap;
         cap.open(pipeline, cv::CAP_GSTREAMER);
@@ -52,17 +31,6 @@ int main(int argc, char **argv)
             std::cerr << "Error al abrir la cámara." << std::endl;
         else
         {
-
-            cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
-
-            cv::Mat cameraMatrix, distCoeffs;
-
-            cameraMatrix = (cv::Mat_<double>(3, 3) << 661.30425, 0, 323.69932,
-                            0, 660.76768, 242.771412,
-                            0, 0, 1);
-
-            distCoeffs = (cv::Mat_<double>(1, 5) << 0.18494665, -0.76514154, -0.00064337, -0.00251164, 0.79249157);
-
             while (!stopProgram)
             {
                 if (cv::waitKey(1) == 'q')

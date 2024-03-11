@@ -7,6 +7,7 @@ glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
 {
     float vecNorm = cv::norm(rotVect);
     float w = cos(vecNorm / 2);
+
     cv::Vec3d xyz = sin(vecNorm / 2) * rotVect / vecNorm;
 
     glm::quat quaternion = glm::quat(w, xyz[0], xyz[1], xyz[2]);
@@ -161,4 +162,14 @@ void drawAxisOnFrame(
     }
 
     cv::imshow(windowTitle, frame);
+}
+
+cv::Mat wHat(const cv::Vec3d v)
+{
+    cv::Mat omegaHat = (cv::Mat_<double>(3, 3) << 
+    0, -v(2), v(1), \
+    v(2), 0, -v(0), \
+    -v(1), v(0), 0);
+
+    return omegaHat;
 }
