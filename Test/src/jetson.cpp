@@ -270,7 +270,7 @@ void runKalmanFilter()
     deltaRot.setIdentity();*/
 
     bool firstRun = true;
-    float deltaT = 10;
+    float deltaT = -1;
     cv::KalmanFilter KF(12, 12, 0);
 
     // Create measurement vector (traslation, quaternion, speeds).
@@ -297,7 +297,6 @@ void runKalmanFilter()
 
         imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
     }*/
-    
 
     for (size_t i = 0; i < cameraData.size(); i++)
     {
@@ -310,7 +309,8 @@ void runKalmanFilter()
         {
             predict(KF);
 
-            deltaT = tempCameraData.time;
+            deltaT = tempCameraData.time - cameraData.at(i-1).time;
+
             updateTransitionMatrix(KF, deltaT);
             updateMeasurementMatrix(KF);
 
@@ -338,6 +338,7 @@ void runKalmanFilter()
             measurementOld = measurement.clone();
             //initStatePostFirstTime(KF, measurement);
             KF.statePost = measurement.clone();
+
             firstRun = false;
         }
     }
@@ -346,11 +347,11 @@ void runKalmanFilter()
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
-    bool generateNewData = true;
+    bool generateNewData = false;
     bool preccessData = false;
     bool stopProgram = false;
     bool ifCalibrateIMUOnly = false;
-    bool runKalmanFilterBool = false;
+    bool runKalmanFilterBool = true;
 
     if (ifCalibrateIMUOnly)
     {
