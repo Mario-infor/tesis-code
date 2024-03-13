@@ -17,6 +17,7 @@
 #include <cameraInfo.h>
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Geometry>
+#include <eigen3/Eigen/Dense>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -52,7 +53,9 @@ void cameraCaptureThread()
             std::cout << "Camera: " << index << std::endl;
             if (doneCalibrating)
             {
-                timeCameraStart = std::chrono::steady_clock::now();
+
+                if (timeCameraStart)
+                    timeCameraStart = std::chrono::steady_clock::now();
                 cv::Mat frame, grayscale;
                 cap.read(frame);
 
@@ -108,6 +111,8 @@ void imuThreadJetson()
         sensors.readCalibVals();
         doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
     } while (cont++ < 2000 && !doneCalibrating);
+
+    
 
     doneCalibrating = true;
     int index = 0;
@@ -240,20 +245,28 @@ void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
     KF.statePost.at<float>(6) = quaternion.z;*/
 }
 
-/*
-void imuPrediction(const float deltaT)
-{
-    // Eigen::Matrix3d dR = Sophus::SO3::exp(omega*delta_t).matrix();
 
-    deltaPos += delta_v_* deltaT + 0.5 * delta_rot_ * acc *dt2;
-    deltaVel += delta_rot_ * acc * deltaT;
-    deltaRot = NormalizeRotationM(delta_rot_ * dR);
-    delta_time_ += deltaT;
+void imuPreintegration(const float deltaT, const Vector3d acc,
+ const Vector3d gyro, Vector3d &deltaPos, Vector3d &deltaVel, Matrix3d &deltaRot)
+{
+    Matrix3d dR = (gyro * deltaT).exp().toMatrix();
+
+    deltaPos += deltaVel * deltaT + 0.5 * deltaRot * acc * deltaT * deltaT;
+    deltaVel += deltaRot * acc * deltaT;
+    deltaRot = deltaRot * dR;
 }
-*/
 
 void runKalmanFilter()
 {
+    Vector3d deltaPos;
+    deltaPos.setZero();
+
+    Vector3d deltaVel;
+    deltaVel.setZero();
+
+    Matrix3d deltaRot;
+    deltaRot.setIdentity();
+
     bool firstRun = true;
     float deltaT = 10;
     cv::KalmanFilter KF(12, 12, 0);
@@ -270,6 +283,19 @@ void runKalmanFilter()
     initKalmanFilter(KF);
 
     std::vector<CameraInput> cameraData = readDataCamera();
+    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
+
+
+    for (size_t i = 0; i < imuReadVector.size(); i++)
+    {
+        ImuInputJetson tempImuData = imuReadVector.at(i);
+
+        Vector3d gyro = Vector3d(tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z);
+        Vector3d acc = Vector3d(tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z);
+
+        imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
+    }
+    
 
     for (size_t i = 0; i < cameraData.size(); i++)
     {
@@ -278,21 +304,9 @@ void runKalmanFilter()
         FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
          dictionary, cameraMatrix, distCoeffs);
 
-        /*
-        cv::Vec3d rotVect = cv::Vec3d(frameMarkersData.rvecs[0][0],
-                                    frameMarkersData.rvecs[0][1],
-                                    frameMarkersData.rvecs[0][2]);
-
-        glm::quat quaternion = convertOpencvRotVectToQuat(rotVect);
-
-        frameMarkersData.qvecs.push_back(cv::Vec4d(quaternion.w, quaternion.x, quaternion.y, quaternion.z));
-        */
-
         if (!firstRun)
         {
             predict(KF);
-
-            std::cout << "statePre: " << KF.statePre << std::endl << std::endl;
 
             deltaT = tempCameraData.time;
             updateTransitionMatrix(KF, deltaT);
@@ -301,23 +315,10 @@ void runKalmanFilter()
             doMeasurement(measurement, measurementOld, frameMarkersData, deltaT);
             measurementOld = measurement.clone();
 
-            std::cout << "measurement: " << measurement << std::endl << std::endl;
-
             correct(KF, measurement);
-            
-            std::cout << "statePost: " << KF.statePost << std::endl << std::endl;
             
             drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
                              tempCameraData.frame, cameraMatrix, distCoeffs, "Original");
-            
-            /*
-            glm::quat tempQuat = glm::quat(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
-                                           KF.statePost.at<float>(5), KF.statePost.at<float>(6));
-
-            cv::Vec3d tempRvec = convertQuatToOpencvRotVect(tempQuat);
-            cv::Vec3d tempTvec = cv::Vec3d(KF.statePost.at<float>(0), KF.statePost.at<float>(1),
-                                             KF.statePost.at<float>(2));
-            */
             
             std::vector<cv::Vec3d> tempTvecs = {cv::Vec3d(KF.statePost.at<float>(0), KF.statePost.at<float>(1),
                                              KF.statePost.at<float>(2))};

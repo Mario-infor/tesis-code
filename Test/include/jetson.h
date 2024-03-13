@@ -41,6 +41,7 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
 
 // Method to predict the next state of the imu data.
-void imuPreintegration();
+void imuPreintegration(const float deltaT, const Vector3d acc,
+ const Vector3d gyro, Vector3d &deltaPos, Vector3d &deltaVel, Matrix3d &deltaRot);
 
 #endif // JETSON_H
