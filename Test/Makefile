@@ -17,15 +17,15 @@ JETSON_LIBS =  `pkg-config --libs opencv4` -lncurses \
 
 LIB = libMario.a
 
-all: $(BUILD_DIR)/jetson $(BUILD_DIR)/readShow $(BUILD_DIR)/EKF
+all: $(BUILD_DIR)/jetson.out $(BUILD_DIR)/readShow.out $(BUILD_DIR)/EKF.out
 
-$(BUILD_DIR)/jetson: $(OBJS_DIR)/jetson.o $(LIB_DIR)/libMario.a
+$(BUILD_DIR)/jetson.out: $(OBJS_DIR)/jetson.o $(LIB_DIR)/libMario.a
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/jetson.o -L ./lib -lMario $(JETSON_LIBS)
 
-$(BUILD_DIR)/readShow: $(OBJS_DIR)/readShow.o
+$(BUILD_DIR)/readShow.out: $(OBJS_DIR)/readShow.o
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/readShow.o $(JETSON_LIBS)
 
-$(BUILD_DIR)/EKF: $(OBJS_DIR)/EKF.o $(LIB_DIR)/libMario.a
+$(BUILD_DIR)/EKF.out: $(OBJS_DIR)/EKF.o $(LIB_DIR)/libMario.a
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -o $@ $(OBJS_DIR)/EKF.o -L ./lib -lMario $(JETSON_LIBS)
 
 $(OBJS_DIR)/jetson.o: $(SRC_DIR)/jetson.cpp include/jetson.h include/cameraInfo.h include/readWriteData.h include/utils.h include/structsFile.h include/RingBuffer.h 
