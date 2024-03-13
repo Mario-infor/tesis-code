@@ -6,7 +6,7 @@
 //#define RING_BUFFER_LENGTH_CAMERA 3750
 
 #define RING_BUFFER_LENGTH_CAMERA 375
-#define RING_BUFFER_LENGTH_IMU 750
+#define RING_BUFFER_LENGTH_IMU 1500
 
 // Global variables that need to be accessed from different threads or methods.
 std::mutex myMutex;
@@ -41,7 +41,7 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
 
 // Method to predict the next state of the imu data.
-void imuPreintegration(const float deltaT, const Vector3d acc,
- const Vector3d gyro, Vector3d &deltaPos, Vector3d &deltaVel, Matrix3d &deltaRot);
+//void imuPreintegration(const float deltaT, const Vector3d acc,
+// const Vector3d gyro, Vector3d &deltaPos, Vector3d &deltaVel, Matrix3d &deltaRot);
 
 #endif // JETSON_H

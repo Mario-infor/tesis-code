@@ -48,37 +48,38 @@ void cameraCaptureThread()
     {
         int index = 0;
 
+        while (!doneCalibrating)
+        {
+            std::cout << "Camera: " << index << std::endl;
+        }
+
         while (index < RING_BUFFER_LENGTH_CAMERA)
         {
             std::cout << "Camera: " << index << std::endl;
-            if (doneCalibrating)
+
+            cv::Mat frame, grayscale;
+            cap.read(frame);
+
+            if (frame.empty())
             {
+                std::cerr << "Could not capture frame." << std::endl;
+                break;
+            }
+            else
+            {
+                cv::cvtColor(frame, grayscale, cv::COLOR_BGR2GRAY);
+                CameraInput capture;
+                capture.index = index;
+                capture.frame = grayscale.clone();
+                capture.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count();
 
-                if (timeCameraStart)
-                    timeCameraStart = std::chrono::steady_clock::now();
-                cv::Mat frame, grayscale;
-                cap.read(frame);
-
-                if (frame.empty())
-                {
-                    std::cerr << "Could not capture frame." << std::endl;
-                    break;
-                }
-                else
-                {
-                    cv::cvtColor(frame, grayscale, cv::COLOR_BGR2GRAY);
-                    CameraInput capture;
-                    capture.index = index;
-                    capture.frame = grayscale.clone();
-                    //capture.frame = frame.clone();
-                    capture.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count();
-
-                    cameraFramesBuffer.Queue(capture);
-                    index++;
-                }
+                cameraFramesBuffer.Queue(capture);
+                index++;
             }
         }
     }
+
+    std::cout << "Camera Thread Finished." << std::endl;
 }
 
 void imuCalibration()
@@ -112,8 +113,6 @@ void imuThreadJetson()
         doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
     } while (cont++ < 2000 && !doneCalibrating);
 
-    
-
     doneCalibrating = true;
     int index = 0;
 
@@ -136,6 +135,8 @@ void imuThreadJetson()
         imuDataJetsonBuffer.Queue(imuInputJetson);
         index++;
     }
+
+    std::cout << "IMU Thread Finished." << std::endl;
 }
 
 void initKalmanFilter(cv::KalmanFilter &KF)
@@ -245,7 +246,7 @@ void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
     KF.statePost.at<float>(6) = quaternion.z;*/
 }
 
-
+/*
 void imuPreintegration(const float deltaT, const Vector3d acc,
  const Vector3d gyro, Vector3d &deltaPos, Vector3d &deltaVel, Matrix3d &deltaRot)
 {
@@ -255,17 +256,18 @@ void imuPreintegration(const float deltaT, const Vector3d acc,
     deltaVel += deltaRot * acc * deltaT;
     deltaRot = deltaRot * dR;
 }
+*/
 
 void runKalmanFilter()
 {
-    Vector3d deltaPos;
+    /*Vector3d deltaPos;
     deltaPos.setZero();
 
     Vector3d deltaVel;
     deltaVel.setZero();
 
     Matrix3d deltaRot;
-    deltaRot.setIdentity();
+    deltaRot.setIdentity();*/
 
     bool firstRun = true;
     float deltaT = 10;
@@ -286,7 +288,7 @@ void runKalmanFilter()
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
 
 
-    for (size_t i = 0; i < imuReadVector.size(); i++)
+    /*for (size_t i = 0; i < imuReadVector.size(); i++)
     {
         ImuInputJetson tempImuData = imuReadVector.at(i);
 
@@ -294,7 +296,7 @@ void runKalmanFilter()
         Vector3d acc = Vector3d(tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z);
 
         imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
-    }
+    }*/
     
 
     for (size_t i = 0; i < cameraData.size(); i++)
@@ -344,13 +346,11 @@ void runKalmanFilter()
 // Main method that creates threads, writes and read data from files and displays data on console.
 int main()
 {
-    bool generateNewData = false;
-    bool preccessData = true;
+    bool generateNewData = true;
+    bool preccessData = false;
     bool stopProgram = false;
     bool ifCalibrateIMUOnly = false;
-    bool runKalmanFilterBool = true;
-
-    timeIMUStart = std::chrono::steady_clock::now();
+    bool runKalmanFilterBool = false;
 
     if (ifCalibrateIMUOnly)
     {
@@ -365,6 +365,18 @@ int main()
     {
         if (generateNewData)
         {
+            timeCameraStart = std::chrono::steady_clock::now();
+            timeIMUStart = std::chrono::steady_clock::now();
+
+            std::cout << "IMU Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count() << endl;
+            std::cout << "Camera Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count() << endl;
+
+            sleep(2);
+            
+            std::cout << "IMU Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count() << endl;
+            std::cout << "Camera Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count() << endl;
+
+
             std::thread cameraCapture(cameraCaptureThread);
             std::thread imu(imuThreadJetson);
 
