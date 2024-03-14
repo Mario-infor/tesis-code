@@ -1,3 +1,8 @@
+#if __INTELLISENSE__
+#undef __ARM_NEON
+#undef __ARM_NEON__
+#endif
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
@@ -15,14 +20,14 @@
 #include <utils.h>
 #include <interpolationUtils.h>
 #include <cameraInfo.h>
-#include <eigen3/Eigen/Core>
-#include <eigen3/Eigen/Geometry>
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/spline.hpp>
 #include <glm/gtc/quaternion.hpp>
+
+using namespace Eigen;
 
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
@@ -246,28 +251,31 @@ void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
     KF.statePost.at<float>(6) = quaternion.z;*/
 }
 
-/*
-void imuPreintegration(const float deltaT, const Vector3d acc,
- const Vector3d gyro, Vector3d &deltaPos, Vector3d &deltaVel, Matrix3d &deltaRot)
+void imuPreintegration(
+    const float deltaT,
+    const Eigen::Vector3d acc,
+    const Eigen::Vector3d gyro,
+    Eigen::Vector3d &deltaPos,
+    Eigen::Vector3d &deltaVel,
+    Eigen::Matrix3d &deltaRot)
 {
-    Matrix3d dR = (gyro * deltaT).exp().toMatrix();
+    Eigen::Matrix3d dR = eulerToQuat(gyro * deltaT).toRotationMatrix();
 
     deltaPos += deltaVel * deltaT + 0.5 * deltaRot * acc * deltaT * deltaT;
     deltaVel += deltaRot * acc * deltaT;
     deltaRot = deltaRot * dR;
 }
-*/
 
 void runKalmanFilter()
 {
-    /*Vector3d deltaPos;
+    Eigen::Vector3d deltaPos;
     deltaPos.setZero();
 
-    Vector3d deltaVel;
+    Eigen::Vector3d deltaVel;
     deltaVel.setZero();
 
-    Matrix3d deltaRot;
-    deltaRot.setIdentity();*/
+    Eigen::Matrix3d deltaRot;
+    deltaRot.setIdentity();
 
     bool firstRun = true;
     float deltaT = -1;
@@ -287,16 +295,15 @@ void runKalmanFilter()
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
 
-
-    /*for (size_t i = 0; i < imuReadVector.size(); i++)
+    for (size_t i = 0; i < imuReadVector.size(); i++)
     {
         ImuInputJetson tempImuData = imuReadVector.at(i);
 
-        Vector3d gyro = Vector3d(tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z);
-        Vector3d acc = Vector3d(tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z);
+        Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
+        Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
 
         imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
-    }*/
+    }
 
     for (size_t i = 0; i < cameraData.size(); i++)
     {
@@ -349,7 +356,6 @@ int main()
 {
     bool generateNewData = false;
     bool preccessData = false;
-    bool stopProgram = false;
     bool ifCalibrateIMUOnly = false;
     bool runKalmanFilterBool = true;
 
@@ -418,10 +424,6 @@ int main()
             WINDOW *win;
             char buff[512];
 
-            myMutex.lock();
-            bool stop = stopProgram;
-            myMutex.unlock();
-
             win = initscr();
             clearok(win, TRUE);
 
@@ -431,13 +433,8 @@ int main()
             int oldTimeIMU = 0;
             int oldTimeCamera = 0;
 
-            while ((imuIndex < imuReadVector.size() || cameraIndex < cameraReadVector.size()) && !stop)
+            while (imuIndex < imuReadVector.size() || cameraIndex < cameraReadVector.size())
             {
-                if (cv::waitKey(1) == 'q')
-                {
-                    stopProgram = stop = true;
-                }
-
                 if (imuIndex < imuReadVector.size())
                 {
                     ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
@@ -520,7 +517,6 @@ int main()
 
                 imuIndex++;
                 cameraIndex++;
-                stop = stopProgram;
             }
 
             endwin();

@@ -4,10 +4,11 @@ SRC_DIR = src
 BUILD_DIR = build
 LIB_DIR = lib
 
-CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include -I $(INCLUDE_JETSON)
+CPPFLAGS = -g -Wall -std=c++11 -I $(BNO055_DIR)/include -I $(INCLUDE_JETSON) -I $(EIGEN_DIR)
 CC = g++
 
 BNO055_DIR = $(HOME)/Mario/BNO055-BBB_IMU-Driver
+EIGEN_DIR = /usr/local/include/eigen-3.4.0/
 
 JETSON_CFLAGS = `pkg-config --cflags opencv4`
 

@@ -7,14 +7,14 @@
                 "/usr/local/include",
                 "/usr/include",
                 "/usr/local/include/opencv4/**",
-                //"/usr/include/opencv4",
+                "/usr/local/include/eigen-3.4.0/",
                 "~/Mario/BNO055-BBB_IMU-Driver/include",
-                "~/Mario/tesis-code/Test/include"
+                "~/Mario/tesis-code/Test/include"                
             ],
             "defines": [],
-            "cStandard": "c17",
-            "cppStandard": "gnu++17",
-            "intelliSenseMode": "linux-gcc-x64",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++11",
+            "intelliSenseMode": "linux-gcc-arm64",
             "configurationProvider": "ms-vscode.makefile-tools",
             "compilerPath": "/usr/bin/g++"
         }

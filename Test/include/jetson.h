@@ -1,6 +1,8 @@
 #ifndef JETSON_H
 #define JETSON_H
 
+#include <Eigen/Dense>
+
 // Amount of IMU data and frames to read from devices.
 //#define RING_BUFFER_LENGTH_CAMERA 1875
 //#define RING_BUFFER_LENGTH_CAMERA 3750
@@ -9,7 +11,6 @@
 #define RING_BUFFER_LENGTH_IMU 1500
 
 // Global variables that need to be accessed from different threads or methods.
-std::mutex myMutex;
 std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
 std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 
@@ -41,7 +42,8 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
 
 // Method to predict the next state of the imu data.
-//void imuPreintegration(const float deltaT, const Vector3d acc,
-// const Vector3d gyro, Vector3d &deltaPos, Vector3d &deltaVel, Matrix3d &deltaRot);
+void imuPreintegration(const float deltaT, const Eigen::Vector3d acc,
+ const Eigen::Vector3d gyro, Eigen::Vector3d &deltaPos, Eigen::Vector3d &deltaVel,
+ Eigen::Matrix3d &deltaRot);
 
 #endif // JETSON_H

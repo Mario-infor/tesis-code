@@ -5,6 +5,7 @@
 #include <opencv2/aruco.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <structsFile.h>
+#include <Eigen/Dense>
 
 #define IMU_ADDRESS "/dev/i2c-1" // Address of the IMU sensor.
 #define	MATH_PI					3.1415926535 // Definition of variable pi.
@@ -38,6 +39,7 @@ FrameMarkersData getRotationTraslationFromFrame(
 // Prints Euler or Accel data from the IMU to the console.
 void printIMUData();
 
+// Draw axis on a frame using information from rvecs and tvecs.
 void drawAxisOnFrame(
     std::vector<cv::Vec3d> rvecs,
     std::vector<cv::Vec3d> tvecs,
@@ -46,6 +48,13 @@ void drawAxisOnFrame(
     cv::Mat distCoeffs,
     std::string windowTitle);
 
+// Get the antisymetric matrix from a vector.
 cv::Mat wHat(const cv::Vec3d v);
+
+int getImuStartingIdexBaseonCamera(std::vector<CameraInput> cameraReadVector,
+ std::vector<ImuInputJetson> imuReadVector);
+
+// convert euler angles to quaternion
+Eigen::Quaternion<double> eulerToQuat(Eigen::Vector3d euler);
 
 #endif // UTILS_H

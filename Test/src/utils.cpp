@@ -1,4 +1,5 @@
 #include <utils.h>
+#include <iostream>
 #include <BNO055-BBB_driver.h>
 #include <curses.h>
 
@@ -95,8 +96,6 @@ void printIMUData()
 
         waddstr(win, buff);
 
-        // sleep(1);
-
         wrefresh(win);
         wclear(win);
     }
@@ -172,4 +171,36 @@ cv::Mat wHat(const cv::Vec3d v)
     -v(1), v(0), 0);
 
     return omegaHat;
+}
+
+int getImuStartingIdexBaseonCamera(std::vector<CameraInput> cameraReadVector,
+ std::vector<ImuInputJetson> imuReadVector)
+{
+    int imuIndex = 0;
+    int tempImuTime = imuReadVector.at(0).time;
+    int cameraTimeStamp = cameraReadVector.at(0).time;
+
+    while (tempImuTime < cameraTimeStamp)
+    {
+        imuIndex++;
+        tempImuTime = imuReadVector.at(imuIndex).time;
+    }
+
+    return imuIndex;
+}
+
+// convert euler angles to quaternion
+Eigen::Quaterniond eulerToQuat(Eigen::Vector3d euler)
+{
+    float angle = MATH_PI / 4;
+    float sinA = std::sin(angle / 2);
+    float cosA = std::cos(angle / 2);
+
+    Eigen::Quaterniond q;
+    q.x() = euler.x() * sinA;
+    q.y() = euler.y() * sinA;
+    q.z() = euler.z() * sinA;
+    q.w() = cosA;
+
+    return q.normalized();
 }
