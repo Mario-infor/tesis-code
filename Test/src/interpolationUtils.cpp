@@ -100,7 +100,7 @@ std::vector<CameraInterpolatedData> interpolateCameraRotation(const std::vector<
                                         (float)(cameraReadVectorCopy[indexCamera + 1].time - cameraReadVectorCopy[indexCamera].time);
 
                     glm::quat interpolatedPoint = glm::slerp(quaternion0, quaternion1, relativePos);
-                    cv::Vec3d rotacionVec3 = convertQuatToOpencvRotVect(interpolatedPoint);
+                    cv::Vec3d rotacionVec3 = QuatToRotVect(interpolatedPoint);
 
                     tempFrameMarkersData.rvecs.push_back(rotacionVec3);
                     tempFrameMarkersData.qvecs.push_back(cv::Vec4d(interpolatedPoint.w, interpolatedPoint.x, interpolatedPoint.y, interpolatedPoint.z));

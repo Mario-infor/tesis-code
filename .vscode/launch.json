@@ -8,7 +8,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/Test/build/jetson",
+            "program": "${workspaceFolder}/Test/build/jetson.out",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

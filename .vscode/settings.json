@@ -77,6 +77,24 @@
         "bitset": "cpp",
         "cfenv": "cpp",
         "ranges": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "unordered_set": "cpp",
+        "hash_map": "cpp",
+        "core": "cpp",
+        "superlusupport": "cpp",
+        "adolcforward": "cpp",
+        "alignedvector3": "cpp",
+        "autodiff": "cpp",
+        "bvh": "cpp",
+        "eulerangles": "cpp",
+        "fft": "cpp",
+        "kroneckerproduct": "cpp",
+        "mprealsupport": "cpp",
+        "numericaldiff": "cpp",
+        "openglsupport": "cpp",
+        "specialfunctions": "cpp",
+        "splines": "cpp",
+        "*.evaluator": "cpp",
+        "*.traits": "cpp"
     }
 }

@@ -16,7 +16,7 @@
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect);
 
 // Convert quaternion to rotation vector.
-cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion);
+cv::Vec3d QuatToRotVect(glm::quat quaternion);
 
 // Create a hard copy of camera vector.
 std::vector<CameraInput> hardCopyCameraVector(
@@ -51,10 +51,15 @@ void drawAxisOnFrame(
 // Get the antisymetric matrix from a vector.
 cv::Mat wHat(const cv::Vec3d v);
 
-int getImuStartingIdexBaseonCamera(std::vector<CameraInput> cameraReadVector,
+int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
  std::vector<ImuInputJetson> imuReadVector);
 
 // convert euler angles to quaternion
 Eigen::Quaternion<double> eulerToQuat(Eigen::Vector3d euler);
 
+void gnuPrintImuPreintegration(
+    FILE *output,
+    std::vector<Eigen::Vector3d> vectorOfPointsOne,
+    std::vector<Eigen::Vector3d> vectorOfPointsTwo);
+    
 #endif // UTILS_H

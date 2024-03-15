@@ -1,3 +1,8 @@
+#if __INTELLISENSE__
+#undef __ARM_NEON
+#undef __ARM_NEON__
+#endif
+
 #include <utils.h>
 #include <iostream>
 #include <BNO055-BBB_driver.h>
@@ -17,7 +22,7 @@ glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
 }
 
 // Convert quaternion to rotation vector.
-cv::Vec3d convertQuatToOpencvRotVect(glm::quat quaternion)
+cv::Vec3d QuatToRotVect(glm::quat quaternion)
 {
     cv::Vec3d rotVect;
 
@@ -173,7 +178,7 @@ cv::Mat wHat(const cv::Vec3d v)
     return omegaHat;
 }
 
-int getImuStartingIdexBaseonCamera(std::vector<CameraInput> cameraReadVector,
+int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
  std::vector<ImuInputJetson> imuReadVector)
 {
     int imuIndex = 0;
@@ -192,7 +197,7 @@ int getImuStartingIdexBaseonCamera(std::vector<CameraInput> cameraReadVector,
 // convert euler angles to quaternion
 Eigen::Quaterniond eulerToQuat(Eigen::Vector3d euler)
 {
-    float angle = MATH_PI / 4;
+    float angle = euler.norm();
     float sinA = std::sin(angle / 2);
     float cosA = std::cos(angle / 2);
 
@@ -203,4 +208,38 @@ Eigen::Quaterniond eulerToQuat(Eigen::Vector3d euler)
     q.w() = cosA;
 
     return q.normalized();
+}
+
+void gnuPrintImuPreintegration(
+    FILE *output,
+    std::vector<Eigen::Vector3d> vectorOfPointsOne,
+    std::vector<Eigen::Vector3d> vectorOfPointsTwo)
+{
+    fprintf(output, "set title \"IMU Preintegration\"\n");
+    fprintf(output, "set xlabel \"x\"\n");
+    fprintf(output, "set ylabel \"y\"\n");
+    fprintf(output, "set zlabel \"z\"\n");
+    fprintf(output, "set ticslevel 3.\n");
+
+    fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue', '-' with points pointtype 7 ps 1 lc rgb 'red'\n");
+    
+    Eigen::Vector3d tempPoint;
+
+    for (size_t i = 0; i < vectorOfPointsOne.size(); i++)
+    {
+        tempPoint = vectorOfPointsOne.at(i);
+        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
+    
+    for (size_t i = 0; i < vectorOfPointsTwo.size(); i++)
+    {
+        tempPoint = vectorOfPointsTwo.at(i);
+        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
+    
+    //usleep(500000);
 }

@@ -12,9 +12,9 @@
                 "~/Mario/tesis-code/Test/include"                
             ],
             "defines": [],
-            "cStandard": "gnu11",
-            "cppStandard": "gnu++11",
-            "intelliSenseMode": "linux-gcc-arm64",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-x64",
             "configurationProvider": "ms-vscode.makefile-tools",
             "compilerPath": "/usr/bin/g++"
         }
