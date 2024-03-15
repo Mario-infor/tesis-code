@@ -49,7 +49,7 @@ void drawAxisOnFrame(
     std::string windowTitle);
 
 // Get the antisymetric matrix from a vector.
-cv::Mat wHat(const cv::Vec3d v);
+Eigen::Matrix3d getWHat(const Eigen::Vector3d v);
 
 int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
  std::vector<ImuInputJetson> imuReadVector);

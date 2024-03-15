@@ -192,7 +192,6 @@ FrameMarkersData frameMarkersData, float deltaT)
 
 void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
 {
-    //cv::Mat_<float> y = measurement - KF.statePre;
     cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
     KF.gain = KF.errorCovPre * KF.measurementMatrix.t() * S.inv();
 
@@ -277,48 +276,39 @@ void runKalmanFilterIMU()
     Eigen::Matrix3d deltaRot;
     deltaRot.setIdentity();
 
-    bool firstRun = true;
+    Eigen::Matrix3d wHat;
+    wHat.setIdentity();
+
+    Eigen::Vector3d calVelocity;
+    calVelocity.setZero();
+
+    Eigen::Matrix4d chi;
+    chi.setZero();
+
+    Eigen::Matrix4d GImu;
+    GImu.setIdentity();
+
+    Eigen::Matrix4d GImuOld;
+    GImuOld.setIdentity();
+
+    Eigen::Matrix4d identity4x4;
+    identity4x4.setIdentity();
+
     float deltaT = -1;
-    cv::KalmanFilter KF(12, 12, 0);
-
-    // Create measurement vector (traslation, quaternion, speeds).
-    cv::Mat_<float> measurement(12, 1);
-    measurement.setTo(cv::Scalar(0));
-
-    // Create old measurement to calculate speeds.
-    cv::Mat_<float> measurementOld(12, 1);
-    measurementOld.setTo(cv::Scalar(0));
-
-    // Initialize Kalman Filter.
-    initKalmanFilter(KF);
 
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
 
     int imuIndex = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
 
-
     std::vector<Eigen::Vector3d> vectorOfPointsOne;
     std::vector<Eigen::Vector3d> vectorOfPointsTwo;
-
-    //vectorOfPointsOne.push_back(deltaPos);
-    //vectorOfPointsTwo.push_back(deltaVel);
 
     FILE *output;
     output = popen("gnuplot", "w");
 
-    for (size_t i = imuIndex; i < imuReadVector.size(); i++)
+    /*for (size_t i = imuIndex; i < imuReadVector.size(); i++)
     {
-        ImuInputJetson tempImuData = imuReadVector.at(i);
-
-        deltaT = tempImuData.time - imuReadVector.at(i-1).time;
-
-        Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
-        Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
-
-        
-
-        imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
         //vectorOfPointsOne.push_back(deltaPos);
         //Eigen::Vector3d moveVec{0.0,0.0,1000.0};
         //vectorOfPointsTwo.push_back(deltaPos + moveVec);
@@ -337,63 +327,60 @@ void runKalmanFilterIMU()
         std::cout << "Delta Rot:\n" << deltaRot << std::endl << std::endl;
         
         //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
-    }
+    }*/
 
-    for (size_t i = 0; i < cameraData.size(); i++)
+    for (size_t i = imuIndex; i < imuReadVector.size(); i++)
     {
-        CameraInput tempCameraData = cameraData.at(i);
+        ImuInputJetson tempImuData = imuReadVector.at(i);
+        deltaT = tempImuData.time - imuReadVector.at(i-1).time;
+        
+        Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
+        Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+        imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
+        
+        wHat = getWHat(gyro);
+        std::cout << "wHat:\n"<< wHat << std::endl << std::endl;
+        
+        calVelocity = deltaVel - wHat * deltaPos;
+        std::cout << "calVelocity:\n"<< calVelocity << std::endl << std::endl;
+        
+        chi <<
+        wHat(0,0), wHat(0,1), wHat(0,2), calVelocity(0),
+        wHat(1,0), wHat(1,1), wHat(1,2), calVelocity(1),
+        wHat(2,0), wHat(2,1), wHat(2,2), calVelocity(2),
+        0, 0, 0, 0;
 
-        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
-         dictionary, cameraMatrix, distCoeffs);
+        std::cout << "chi:\n"<< chi << std::endl << std::endl;
+        
+        GImu = (identity4x4 + chi * deltaT) * GImuOld;
 
-        if (!firstRun)
-        {
-            predict(KF);
+        std::cout << "GImu:\n"<< GImu << std::endl << std::endl;
+        
+        Eigen::Matrix3d tempRot;
+        tempRot = GImu.block<3,3>(0,0);
 
-            deltaT = tempCameraData.time - cameraData.at(i-1).time;
+        std::cout << "tempRot:\n"<< tempRot << std::endl << std::endl;
+        
+        Eigen::Vector3d tempTvec = {GImu(0,3), GImu(1,3), GImu(2,3)};
 
-            updateTransitionMatrix(KF, deltaT);
-            updateMeasurementMatrix(KF);
+        Eigen::Quaterniond tempQuat(tempRot);
+        Eigen::Vector3d rotationAxis = tempQuat.vec().normalized();
+        double rotationAngle = 2.0 * std::acos(tempQuat.w());
+        Eigen::Vector3d rotationVector = rotationAngle * rotationAxis;
 
-            doMeasurement(measurement, measurementOld, frameMarkersData, deltaT);
-            measurementOld = measurement.clone();
+        std::cout << "tempQuat:\n"<< tempQuat << std::endl << std::endl;
+        std::cout << "rotationVector:\n"<< rotationVector << std::endl << std::endl;
 
-            correct(KF, measurement);
-            
-            drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
-                            tempCameraData.frame, cameraMatrix, distCoeffs, "Original");
-            
-            cv::Vec3d tempTvec = {cv::Vec3d(KF.statePost.at<float>(0), KF.statePost.at<float>(1),
-                                             KF.statePost.at<float>(2))};
-            std::vector<cv::Vec3d> tempTvecs;
-            tempTvecs.push_back(tempTvec);
+        Eigen::Quaterniond tempOriginalQuat = {tempImuData.rotQuat[0], tempImuData.rotQuat[1], tempImuData.rotQuat[2], tempImuData.rotQuat[3]};
+        Eigen::Vector3d rotationAxisOriginal = tempOriginalQuat.vec().normalized();
+        double rotationAngleOrigianl = 2.0 * std::acos(tempOriginalQuat.w());
+        Eigen::Vector3d rotationVectorOriginal = rotationAngleOrigianl * rotationAxisOriginal;
 
-            cv::Vec3d tempRvec = {cv::Vec3d(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
-                                             KF.statePost.at<float>(5))};
-            std::vector<cv::Vec3d> tempRvecs;
-            tempRvecs.push_back(tempRvec);
+        vectorOfPointsOne.push_back(rotationVectorOriginal);
+        vectorOfPointsTwo.push_back(rotationVector);
+        gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
 
-            drawAxisOnFrame(tempRvecs, tempTvecs, tempCameraData.frame, cameraMatrix, distCoeffs, "EKF");
-
-            Eigen::Vector3d graphTvecOriginal{frameMarkersData.rvecs[0][0], frameMarkersData.rvecs[0][1], frameMarkersData.rvecs[0][2]};
-            Eigen::Vector3d graphTvecKF{tempRvec[0], tempRvec[1], tempRvec[2]};
-            
-            vectorOfPointsOne.push_back(graphTvecOriginal);
-            vectorOfPointsTwo.push_back(graphTvecKF);
-
-            gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
-
-            cv::waitKey(33);
-        }
-        else
-        {   
-            doMeasurement(measurement, measurementOld, frameMarkersData,  deltaT);
-            measurementOld = measurement.clone();
-            //initStatePostFirstTime(KF, measurement);
-            KF.statePost = measurement.clone();
-
-            firstRun = false;
-        }
+        GImuOld = GImu;
     }
 
     sleep(10);
@@ -402,15 +389,6 @@ void runKalmanFilterIMU()
 
 void runKalmanFilterCamera()
 {
-    Eigen::Vector3d deltaPos;
-    deltaPos.setZero();
-
-    Eigen::Vector3d deltaVel;
-    deltaVel.setZero();
-
-    Eigen::Matrix3d deltaRot;
-    deltaRot.setIdentity();
-
     bool firstRun = true;
     float deltaT = -1;
     cv::KalmanFilter KF(12, 12, 0);
@@ -427,51 +405,12 @@ void runKalmanFilterCamera()
     initKalmanFilter(KF);
 
     std::vector<CameraInput> cameraData = readDataCamera();
-    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
-
-    int imuIndex = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
-
 
     std::vector<Eigen::Vector3d> vectorOfPointsOne;
     std::vector<Eigen::Vector3d> vectorOfPointsTwo;
 
-    //vectorOfPointsOne.push_back(deltaPos);
-    //vectorOfPointsTwo.push_back(deltaVel);
-
     FILE *output;
     output = popen("gnuplot", "w");
-
-    for (size_t i = imuIndex; i < imuReadVector.size(); i++)
-    {
-        ImuInputJetson tempImuData = imuReadVector.at(i);
-
-        deltaT = tempImuData.time - imuReadVector.at(i-1).time;
-
-        Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
-        Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
-
-        
-
-        imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
-        //vectorOfPointsOne.push_back(deltaPos);
-        //Eigen::Vector3d moveVec{0.0,0.0,1000.0};
-        //vectorOfPointsTwo.push_back(deltaPos + moveVec);
-
-        Eigen::Quaterniond tempQuat(deltaRot);
-        Eigen::Vector3d rotationAxis = tempQuat.vec().normalized();
-        double rotationAngle = 2.0 * std::acos(tempQuat.w());
-        Eigen::Vector3d rotationVector = rotationAngle * rotationAxis;
-        std::cout << "rotationVector:\n" << rotationVector << std::endl << std::endl;
-
-        std::cout << "OriginalQuat:\n" << glm::to_string(tempImuData.gyroVect) << std::endl << std::endl;
-
-        std::cout << "Delta Time:\n"<< deltaT << std::endl << std::endl;
-        std::cout << "Delta Pos:\n" << deltaPos << std::endl << std::endl;
-        std::cout << "Delta Vel:\n" << deltaVel << std::endl << std::endl;
-        std::cout << "Delta Rot:\n" << deltaRot << std::endl << std::endl;
-        
-        //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
-    }
 
     for (size_t i = 0; i < cameraData.size(); i++)
     {
@@ -549,7 +488,8 @@ int main()
     }
     else if (runKalmanFilterBool)
     {
-        runKalmanFilterCamera();
+        //runKalmanFilterCamera();
+        runKalmanFilterIMU();
     }
     else
     {
@@ -557,15 +497,6 @@ int main()
         {
             timeCameraStart = std::chrono::steady_clock::now();
             timeIMUStart = std::chrono::steady_clock::now();
-
-            std::cout << "IMU Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count() << endl;
-            std::cout << "Camera Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count() << endl;
-
-            sleep(2);
-            
-            std::cout << "IMU Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count() << endl;
-            std::cout << "Camera Start Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeCameraStart).count() << endl;
-
 
             std::thread cameraCapture(cameraCaptureThread);
             std::thread imu(imuThreadJetson);

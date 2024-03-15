@@ -168,14 +168,15 @@ void drawAxisOnFrame(
     cv::imshow(windowTitle, frame);
 }
 
-cv::Mat wHat(const cv::Vec3d v)
+Eigen::Matrix3d getWHat(const Eigen::Vector3d v)
 {
-    cv::Mat omegaHat = (cv::Mat_<double>(3, 3) << 
-    0, -v(2), v(1), \
-    v(2), 0, -v(0), \
-    -v(1), v(0), 0);
+    Eigen::Matrix3d wHat;
+    wHat << 
+    0,      -v.z(),  v.y(),
+    v.z(),   0,      -v.x(),
+    -v.y(),  v.x(),   0;
 
-    return omegaHat;
+    return wHat;
 }
 
 int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
