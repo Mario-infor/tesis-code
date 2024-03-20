@@ -15,8 +15,11 @@
 // Convert rotation vector to quaternion.
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect);
 
-// Convert quaternion to rotation vector.
+// Convert quaternion to rotation vector using glm and opencv.
 cv::Vec3d QuatToRotVect(glm::quat quaternion);
+
+// Convert quaternion to rotation vector using Eigen.
+Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion);
 
 // Create a hard copy of camera vector.
 std::vector<CameraInput> hardCopyCameraVector(
@@ -61,5 +64,19 @@ void gnuPrintImuPreintegration(
     FILE *output,
     std::vector<Eigen::Vector3d> vectorOfPointsOne,
     std::vector<Eigen::Vector3d> vectorOfPointsTwo);
+
+// Normalize a rotation matrix converting it to Quaternion 
+// and using Eigen's normalized() method.
+Eigen::Matrix3d normalizeRotationMatrix(Eigen::Matrix3d matrix);
+
+// Normalize a quaternion using Eigen's normalized() method 
+// and transforming it to positive angle if necessary.
+Eigen::Quaterniond normalizeQuaternion(Eigen::Quaterniond quat);
+
+// Guarantee that the rotation matrix is orthonormal.
+Eigen::Matrix3d GramSchmidt(Eigen::Matrix3d rotationMatrix);
+
+// Project a vector u onto a vector v.
+Eigen::Vector3d proj(Eigen::Vector3d u, Eigen::Vector3d v);
     
 #endif // UTILS_H

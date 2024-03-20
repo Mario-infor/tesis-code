@@ -40,6 +40,25 @@ cv::Vec3d QuatToRotVect(glm::quat quaternion)
     return rotVect;
 }
 
+// Convert quaternion to rotation vector.
+Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion)
+{
+    Eigen::Vector3d rotVect;
+
+    float w = quaternion.w();
+    float x = quaternion.x();
+    float y = quaternion.y();
+    float z = quaternion.z();
+
+    float vecNorm = 2 * acos(w);
+
+    rotVect[0] = x * vecNorm / sin(vecNorm / 2);
+    rotVect[1] = y * vecNorm / sin(vecNorm / 2);
+    rotVect[2] = z * vecNorm / sin(vecNorm / 2);
+
+    return rotVect;
+}
+
 // Create a hard copy of camera vector.
 std::vector<CameraInput> hardCopyCameraVector(
     std::vector<CameraInput> cameraReadVector)
@@ -222,7 +241,7 @@ void gnuPrintImuPreintegration(
     fprintf(output, "set zlabel \"z\"\n");
     fprintf(output, "set ticslevel 3.\n");
 
-    fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue', '-' with points pointtype 7 ps 1 lc rgb 'red'\n");
+    fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Original', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'Prediction'\n");
     
     Eigen::Vector3d tempPoint;
 
@@ -243,4 +262,43 @@ void gnuPrintImuPreintegration(
     fprintf(output, "e\n");
     
     //usleep(500000);
+}
+
+Eigen::Matrix3d normalizeRotationMatrix(Eigen::Matrix3d matrix)
+{
+    Eigen::Quaterniond quat(matrix);
+
+    return quat.normalized().toRotationMatrix();
+}
+
+Eigen::Quaterniond normalizeQuaternion(Eigen::Quaterniond quat)
+{
+    Eigen::Quaterniond temp(quat);
+
+    if(temp.w() < 0)
+    {
+        temp.coeffs() *= -1;
+    }
+    return temp.normalized();
+}
+
+Eigen::Matrix3d GramSchmidt(Eigen::Matrix3d rotationMatrix)
+{
+    Eigen::Vector3d v1 = rotationMatrix.block<3,1>(0,0);
+    Eigen::Vector3d v2 = rotationMatrix.block<3,1>(0,1);
+    Eigen::Vector3d v3 = rotationMatrix.block<3,1>(0,2);
+
+    Eigen::Vector3d u1 = v1;
+    Eigen::Vector3d u2 = v2 - proj(u1, v2);
+    Eigen::Vector3d u3 = v3 - proj(u1, v3) - proj(u2, v3);
+
+    Eigen::Matrix3d M;
+    M << u1/u1.norm(), u2/u2.norm(), u3/u3.norm();
+
+    return M;
+}
+
+Eigen::Vector3d proj(Eigen::Vector3d u, Eigen::Vector3d v)
+{
+    return (u * u.dot(v)) / u.dot(u);
 }

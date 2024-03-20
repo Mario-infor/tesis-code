@@ -262,10 +262,10 @@ void imuPreintegration(
 
     deltaPos += deltaVel * deltaT + 0.5 * deltaRot * acc * deltaT * deltaT;
     deltaVel += deltaRot * acc * deltaT;
-    deltaRot = deltaRot * dR;
+    deltaRot = normalizeRotationMatrix(deltaRot * dR);
 }
 
-void runKalmanFilterIMU()
+void runIMUPrediction()
 {
     Eigen::Vector3d deltaPos;
     deltaPos.setZero();
@@ -307,28 +307,6 @@ void runKalmanFilterIMU()
     FILE *output;
     output = popen("gnuplot", "w");
 
-    /*for (size_t i = imuIndex; i < imuReadVector.size(); i++)
-    {
-        //vectorOfPointsOne.push_back(deltaPos);
-        //Eigen::Vector3d moveVec{0.0,0.0,1000.0};
-        //vectorOfPointsTwo.push_back(deltaPos + moveVec);
-
-        Eigen::Quaterniond tempQuat(deltaRot);
-        Eigen::Vector3d rotationAxis = tempQuat.vec().normalized();
-        double rotationAngle = 2.0 * std::acos(tempQuat.w());
-        Eigen::Vector3d rotationVector = rotationAngle * rotationAxis;
-        std::cout << "rotationVector:\n" << rotationVector << std::endl << std::endl;
-
-        std::cout << "OriginalQuat:\n" << glm::to_string(tempImuData.gyroVect) << std::endl << std::endl;
-
-        std::cout << "Delta Time:\n"<< deltaT << std::endl << std::endl;
-        std::cout << "Delta Pos:\n" << deltaPos << std::endl << std::endl;
-        std::cout << "Delta Vel:\n" << deltaVel << std::endl << std::endl;
-        std::cout << "Delta Rot:\n" << deltaRot << std::endl << std::endl;
-        
-        //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
-    }*/
-
     for (size_t i = imuIndex; i < imuReadVector.size(); i++)
     {
         ImuInputJetson tempImuData = imuReadVector.at(i);
@@ -340,7 +318,7 @@ void runKalmanFilterIMU()
         
         wHat = getWHat(gyro);
         std::cout << "wHat:\n"<< wHat << std::endl << std::endl;
-        
+
         calVelocity = deltaVel - wHat * deltaPos;
         std::cout << "calVelocity:\n"<< calVelocity << std::endl << std::endl;
         
@@ -353,28 +331,27 @@ void runKalmanFilterIMU()
         std::cout << "chi:\n"<< chi << std::endl << std::endl;
         
         GImu = (identity4x4 + chi * deltaT) * GImuOld;
-
         std::cout << "GImu:\n"<< GImu << std::endl << std::endl;
-        
+        std::cout << "GImuOld:\n"<< GImuOld << std::endl << std::endl;
+
         Eigen::Matrix3d tempRot;
         tempRot = GImu.block<3,3>(0,0);
-
-        std::cout << "tempRot:\n"<< tempRot << std::endl << std::endl;
         
         Eigen::Vector3d tempTvec = {GImu(0,3), GImu(1,3), GImu(2,3)};
 
-        Eigen::Quaterniond tempQuat(tempRot);
-        Eigen::Vector3d rotationAxis = tempQuat.vec().normalized();
-        double rotationAngle = 2.0 * std::acos(tempQuat.w());
-        Eigen::Vector3d rotationVector = rotationAngle * rotationAxis;
+        Eigen::Matrix3d gram = GramSchmidt(tempRot);
+        Eigen::Quaterniond tempQuatGram(gram);
 
-        std::cout << "tempQuat:\n"<< tempQuat << std::endl << std::endl;
+        std::cout << "gram:\n" << gram << std::endl << std::endl;
+
+        Eigen::Vector3d rotationVector = QuatToRotVectEigen(tempQuatGram);
         std::cout << "rotationVector:\n"<< rotationVector << std::endl << std::endl;
 
         Eigen::Quaterniond tempOriginalQuat = {tempImuData.rotQuat[0], tempImuData.rotQuat[1], tempImuData.rotQuat[2], tempImuData.rotQuat[3]};
-        Eigen::Vector3d rotationAxisOriginal = tempOriginalQuat.vec().normalized();
-        double rotationAngleOrigianl = 2.0 * std::acos(tempOriginalQuat.w());
-        Eigen::Vector3d rotationVectorOriginal = rotationAngleOrigianl * rotationAxisOriginal;
+        tempOriginalQuat.normalize();
+        
+        Eigen::Vector3d rotationVectorOriginal = QuatToRotVectEigen(tempOriginalQuat);
+        std::cout << "rotationVectorOriginal:\n"<< rotationVectorOriginal << std::endl << std::endl;
 
         vectorOfPointsOne.push_back(rotationVectorOriginal);
         vectorOfPointsTwo.push_back(rotationVector);
@@ -489,7 +466,7 @@ int main()
     else if (runKalmanFilterBool)
     {
         //runKalmanFilterCamera();
-        runKalmanFilterIMU();
+        runIMUPrediction();
     }
     else
     {

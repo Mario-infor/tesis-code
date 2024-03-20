@@ -46,4 +46,10 @@ void imuPreintegration(const float deltaT, const Eigen::Vector3d acc,
  const Eigen::Vector3d gyro, Eigen::Vector3d &deltaPos, Eigen::Vector3d &deltaVel,
  Eigen::Matrix3d &deltaRot);
 
+// Method to predict and correct the state of the camera data.
+void runKalmanFilterCamera();
+
+// Method to predict the state of the IMU data.
+void runIMUPrediction();
+
 #endif // JETSON_H
