@@ -258,7 +258,10 @@ void imuPreintegration(
     Eigen::Vector3d &deltaVel,
     Eigen::Matrix3d &deltaRot)
 {
-    Eigen::Matrix3d dR = eulerToQuat(gyro * deltaT).toRotationMatrix();
+    // Eigen::Matrix3d dR = rotVecToQuat(gyro * deltaT).toRotationMatrix();
+    // deltaRot = normalizeRotationMatrix(deltaRot * dR);
+
+    Eigen::Matrix3d dR = matrixExp(gyro * deltaT);
 
     deltaPos += deltaVel * deltaT + 0.5 * deltaRot * acc * deltaT * deltaT;
     deltaVel += deltaRot * acc * deltaT;
@@ -294,7 +297,7 @@ void runIMUPrediction()
     Eigen::Matrix4d identity4x4;
     identity4x4.setIdentity();
 
-    float deltaT = -1;
+    float deltaT = 0;
 
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
@@ -307,16 +310,20 @@ void runIMUPrediction()
     FILE *output;
     output = popen("gnuplot", "w");
 
+    Eigen::Matrix3d correctionR;
+    correctionR.setIdentity();
+    bool correctionRSet = false;
+
     for (size_t i = imuIndex; i < imuReadVector.size(); i++)
     {
         ImuInputJetson tempImuData = imuReadVector.at(i);
-        deltaT = tempImuData.time - imuReadVector.at(i-1).time;
+        deltaT += tempImuData.time - imuReadVector.at(i-1).time;
         
         Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
         Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
         imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
         
-        wHat = getWHat(gyro);
+        /*wHat = getWHat(gyro);
         std::cout << "wHat:\n"<< wHat << std::endl << std::endl;
 
         calVelocity = deltaVel - wHat * deltaPos;
@@ -330,34 +337,52 @@ void runIMUPrediction()
 
         std::cout << "chi:\n"<< chi << std::endl << std::endl;
         
-        GImu = (identity4x4 + chi * deltaT) * GImuOld;
+        GImu = (identity4x4 + chi * deltaT) * GImuOld;*/
+
+        GImu.block<3,3>(0,0) = deltaRot;
+        GImu.block<3,1>(0,3) = deltaPos;
+
         std::cout << "GImu:\n"<< GImu << std::endl << std::endl;
-        std::cout << "GImuOld:\n"<< GImuOld << std::endl << std::endl;
-
-        Eigen::Matrix3d tempRot;
-        tempRot = GImu.block<3,3>(0,0);
-        
-        Eigen::Vector3d tempTvec = {GImu(0,3), GImu(1,3), GImu(2,3)};
-
-        Eigen::Matrix3d gram = GramSchmidt(tempRot);
-        Eigen::Quaterniond tempQuatGram(gram);
-
-        std::cout << "gram:\n" << gram << std::endl << std::endl;
-
-        Eigen::Vector3d rotationVector = QuatToRotVectEigen(tempQuatGram);
-        std::cout << "rotationVector:\n"<< rotationVector << std::endl << std::endl;
+        //std::cout << "GImuOld:\n"<< GImuOld << std::endl << std::endl;
 
         Eigen::Quaterniond tempOriginalQuat = {tempImuData.rotQuat[0], tempImuData.rotQuat[1], tempImuData.rotQuat[2], tempImuData.rotQuat[3]};
         tempOriginalQuat.normalize();
-        
+
         Eigen::Vector3d rotationVectorOriginal = QuatToRotVectEigen(tempOriginalQuat);
         std::cout << "rotationVectorOriginal:\n"<< rotationVectorOriginal << std::endl << std::endl;
+
+        Eigen::Matrix3d tempRot;
+        tempRot = GImu.block<3,3>(0,0);
+
+        /*if (!correctionRSet)
+        {
+            
+            correctionR = originalRotMatrix * tempRot.transpose();
+            correctionRSet = true;
+        }
+
+        tempRot = correctionR * tempRot; */
+
+        /*if (i % 5 == 0)
+        {
+            Eigen::Matrix3d originalRotMatrix = tempOriginalQuat.toRotationMatrix();
+
+            tempRot = originalRotMatrix;
+        }*/
+
+        //Eigen::Matrix3d gram = GramSchmidt(tempRot);
+        Eigen::Quaterniond tempQuatGram(tempRot);
+
+        //std::cout << "gram:\n" << gram << std::endl << std::endl;
+
+        Eigen::Vector3d rotationVector = QuatToRotVectEigen(tempQuatGram);
+        std::cout << "rotationVector:\n"<< rotationVector << std::endl << std::endl;
 
         vectorOfPointsOne.push_back(rotationVectorOriginal);
         vectorOfPointsTwo.push_back(rotationVector);
         gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
 
-        GImuOld = GImu;
+        //GImuOld = GImu;
     }
 
     sleep(10);

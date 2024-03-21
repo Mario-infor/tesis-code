@@ -215,7 +215,7 @@ int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
 }
 
 // convert euler angles to quaternion
-Eigen::Quaterniond eulerToQuat(Eigen::Vector3d euler)
+Eigen::Quaterniond rotVecToQuat(Eigen::Vector3d euler)
 {
     float angle = euler.norm();
     float sinA = std::sin(angle / 2);
@@ -261,7 +261,7 @@ void gnuPrintImuPreintegration(
     fflush(output);
     fprintf(output, "e\n");
     
-    //usleep(500000);
+    usleep(500000);
 }
 
 Eigen::Matrix3d normalizeRotationMatrix(Eigen::Matrix3d matrix)
@@ -302,3 +302,26 @@ Eigen::Vector3d proj(Eigen::Vector3d u, Eigen::Vector3d v)
 {
     return (u * u.dot(v)) / u.dot(u);
 }
+
+Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT)
+{
+    float norm = gyroTimesDeltaT.norm();
+    float normInv = 1 / norm;
+    Eigen::Matrix3d wHat = getWHat(gyroTimesDeltaT);
+
+    Eigen::Matrix3d I3x3 = Eigen::Matrix3d::Identity();
+
+    if (norm < 1e-3)
+    {
+        return I3x3 + wHat;
+    }        
+    else
+    {
+        Eigen::Matrix3d wHat2 = wHat * wHat;
+        float normInv2 = normInv * normInv;
+
+        return I3x3 + sin(norm) * normInv * wHat + (1 - cos(norm)) * normInv2 * wHat2;
+    }
+        
+}
+

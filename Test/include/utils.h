@@ -58,7 +58,7 @@ int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
  std::vector<ImuInputJetson> imuReadVector);
 
 // convert euler angles to quaternion
-Eigen::Quaternion<double> eulerToQuat(Eigen::Vector3d euler);
+Eigen::Quaternion<double> rotVecToQuat(Eigen::Vector3d euler);
 
 void gnuPrintImuPreintegration(
     FILE *output,
@@ -78,5 +78,8 @@ Eigen::Matrix3d GramSchmidt(Eigen::Matrix3d rotationMatrix);
 
 // Project a vector u onto a vector v.
 Eigen::Vector3d proj(Eigen::Vector3d u, Eigen::Vector3d v);
+
+// Get the exponential matrix of a vector.
+Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT);
     
 #endif // UTILS_H
