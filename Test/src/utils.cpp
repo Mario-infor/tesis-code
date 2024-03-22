@@ -7,6 +7,7 @@
 #include <iostream>
 #include <BNO055-BBB_driver.h>
 #include <curses.h>
+#include <iterator>
 
 // Convert rotation vector to quaternion.
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
@@ -264,6 +265,39 @@ void gnuPrintImuPreintegration(
     usleep(500000);
 }
 
+void gnuPrintImuCompareValues(
+    FILE *output,
+    std::vector<float> vectorOfPointsOne,
+    std::vector<float> vectorOfPointsTwo)
+{
+    fprintf(output, "set title \"IMU Data Comparisson\"\n");
+    fprintf(output, "set xlabel \"x\"\n");
+    fprintf(output, "set ylabel \"y\"\n");
+    fprintf(output, "set ticslevel 3.\n");
+
+    fprintf(output, "plot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Original', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'Prediction'\n");
+    
+    float tempPoint;
+
+    for (size_t i = 0; i < vectorOfPointsOne.size(); i++)
+    {
+        tempPoint = vectorOfPointsOne[i];
+        fprintf(output, "%g %g\n", (double)i, tempPoint);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
+    
+    for (size_t i = 0; i < vectorOfPointsTwo.size(); i++)
+    {
+        tempPoint = vectorOfPointsTwo[i];
+        fprintf(output, "%g %g\n", (double)i, tempPoint);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
+    
+    //usleep(500000);
+}
+
 Eigen::Matrix3d normalizeRotationMatrix(Eigen::Matrix3d matrix)
 {
     Eigen::Quaterniond quat(matrix);
@@ -323,5 +357,31 @@ Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT)
         return I3x3 + sin(norm) * normInv * wHat + (1 - cos(norm)) * normInv2 * wHat2;
     }
         
+}
+
+void normalizeDataSet(
+    std::vector<Eigen::Vector3d> points,
+    std::vector<float> &result,
+    int variable)
+{
+    float max = -1000000;
+    float min = 1000000;
+
+    for (size_t i = 0; i < points.size(); i++)
+    {
+        if (points.at(i)[variable] > max)
+        {
+            max = points.at(i)[variable];
+        }
+        else if (points.at(i)[variable] < min)
+        {
+            min = points.at(i)[variable];
+        }
+    }
+
+    for (size_t i = 0; i < points.size(); i++)
+    {
+        result.push_back((points.at(i)[variable] - min) / (max - min));
+    }
 }
 

@@ -65,6 +65,11 @@ void gnuPrintImuPreintegration(
     std::vector<Eigen::Vector3d> vectorOfPointsOne,
     std::vector<Eigen::Vector3d> vectorOfPointsTwo);
 
+void gnuPrintImuCompareValues(
+    FILE *output,
+    std::vector<float> vectorOfPointsOne,
+    std::vector<float> vectorOfPointsTwo);
+
 // Normalize a rotation matrix converting it to Quaternion 
 // and using Eigen's normalized() method.
 Eigen::Matrix3d normalizeRotationMatrix(Eigen::Matrix3d matrix);
@@ -81,5 +86,7 @@ Eigen::Vector3d proj(Eigen::Vector3d u, Eigen::Vector3d v);
 
 // Get the exponential matrix of a vector.
 Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT);
+
+void normalizeDataSet(std::vector<Eigen::Vector3d> points, std::vector<float> &result, int variable);
     
 #endif // UTILS_H
