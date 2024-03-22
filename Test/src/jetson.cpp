@@ -256,18 +256,10 @@ void imuPreintegration(
     const Eigen::Vector3d gyro,
     Eigen::Vector3d &deltaPos,
     Eigen::Vector3d &deltaVel,
-    Eigen::Matrix3d &deltaRot)
+    Eigen::Matrix3d imuRot)
 {
-    // Eigen::Matrix3d dR = rotVecToQuat(gyro * deltaT).toRotationMatrix();
-    // deltaRot = normalizeRotationMatrix(deltaRot * dR);
-
-    Eigen::Matrix3d dR = matrixExp(gyro * deltaT);
-
-    deltaPos += deltaVel * deltaT + 0.5 * deltaRot * acc * deltaT * deltaT;
-    deltaVel += deltaRot * acc * deltaT;
-    deltaRot = deltaRot * dR;
-    deltaRot = GramSchmidt(deltaRot * dR);
-    // deltaRot = normalizeRotationMatrix(deltaRot * dR);
+    deltaPos += deltaVel * deltaT + 0.5 * imuRot * acc * deltaT * deltaT;
+    deltaVel += imuRot * acc * deltaT;
 }
 
 void runIMUPrediction()
@@ -278,8 +270,8 @@ void runIMUPrediction()
     Eigen::Vector3d deltaVel;
     deltaVel.setZero();
 
-    Eigen::Matrix3d deltaRot;
-    deltaRot.setIdentity();
+    Eigen::Matrix3d imuRot;
+    imuRot.setIdentity();
 
     Eigen::Matrix3d wHat;
     wHat.setIdentity();
@@ -301,10 +293,10 @@ void runIMUPrediction()
 
     bool firstRun = true;
     float deltaT = -1;
-    cv::KalmanFilter KF(10, 6, 0);
+    cv::KalmanFilter KF(16, 16, 0);
     float cumulativeDeltaT = 0;
 
-    Eigen::Matrix<double, 12, 1> measurement;
+    Eigen::Matrix<double, 16, 1> measurement;
     measurement.setZero();
 
     std::vector<CameraInput> cameraData = readDataCamera();
@@ -318,10 +310,6 @@ void runIMUPrediction()
     FILE *output;
     output = popen("gnuplot", "w");
 
-    Eigen::Matrix3d correctionR;
-    correctionR.setIdentity();
-    bool correctionRSet = false;
-
     for (size_t i = imuIndex; i < imuReadVector.size(); i++)
     {
         ImuInputJetson tempImuData = imuReadVector.at(i);
@@ -330,96 +318,141 @@ void runIMUPrediction()
         
         if (!firstRun)
         {
-            //KF.statePre = transitionFunction();
+            /////////////////////////// Prediction ////////////////////////////////////
+            Eigen::Quaterniond stateQuat{
+                KF.statePost.at<float>(0),
+                KF.statePost.at<float>(1),
+                KF.statePost.at<float>(2),
+                KF.statePost.at<float>(3)
+            };
+            stateQuat.normalize();
+            Eigen::Matrix3d stateRot = stateQuat.toRotationMatrix();
+            Eigen::Vector3d stateGyro{
+                KF.statePost.at<float>(4),
+                KF.statePost.at<float>(5),
+                KF.statePost.at<float>(6)
+            };
+
+            Eigen::Matrix3d stateWHat = getWHat(stateGyro);
+            Eigen::Matrix3d estimatedStateRot = stateRot + stateWHat * stateRot * deltaT;
+            Eigen::Quaterniond estimatedStateQuat(estimatedStateRot);
+
+            Eigen::Vector3d statePos{
+                KF.statePost.at<float>(10),
+                KF.statePost.at<float>(11),
+                KF.statePost.at<float>(12)
+            };
+
+            Eigen::Vector3d stateVel{
+                KF.statePost.at<float>(13),
+                KF.statePost.at<float>(14),
+                KF.statePost.at<float>(15)
+            };
+
+            Eigen::Vector3d estimatedStatePos = statePos + stateVel * deltaT;
+            
+            KF.statePre = KF.statePost;
+            KF.statePre.at<float>(0) = estimatedStateQuat.w();
+            KF.statePre.at<float>(1) = estimatedStateQuat.x();
+            KF.statePre.at<float>(2) = estimatedStateQuat.y();
+            KF.statePre.at<float>(3) = estimatedStateQuat.z();
+
+            KF.statePre.at<float>(10) = estimatedStatePos.x();
+            KF.statePre.at<float>(11) = estimatedStatePos.y();
+            KF.statePre.at<float>(12) = estimatedStatePos.z();
+
             //KF.errorCovPre = transitionFunctionError();
+
+            /////////////////////////// Measurenment ////////////////////////////////////
 
             Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
             Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
-
-            measurement(0,0) = gyro[0];
-            measurement(1,0) = gyro[1];
-            measurement(2,0) = gyro[2];
-            measurement(3,0) = acc[0];
-            measurement(4,0) = acc[1];
-            measurement(5,0) = acc[2];
-
-            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
-            
-            Eigen::Quaterniond oldQuat{
-                KF.statePost.at<float>(6),
-                KF.statePost.at<float>(7),
-                KF.statePost.at<float>(8),
-                KF.statePost.at<float>(9)
+            Eigen::Quaterniond imuQuat{
+                tempImuData.rotQuat[0],
+                tempImuData.rotQuat[1],
+                tempImuData.rotQuat[2],
+                tempImuData.rotQuat[3]
                 };
 
-            Eigen::Quaterniond newQuat{
-                KF.statePre.at<float>(6),
-                KF.statePre.at<float>(7),
-                KF.statePre.at<float>(8),
-                KF.statePre.at<float>(9)
-                };
+            imuQuat.normalize();
+            Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
 
-            Eigen::Matrix3d oldR = oldQuat.toRotationMatrix();
-            Eigen::Matrix3d newR = newQuat.toRotationMatrix();
+            measurement(0,0) = imuQuat.w();
+            measurement(1,0) = imuQuat.x();
+            measurement(2,0) = imuQuat.y();
+            measurement(3,0) = imuQuat.z();
+            measurement(4,0) = gyro[0];
+            measurement(5,0) = gyro[1];
+            measurement(6,0) = gyro[2];
+            measurement(7,0) = acc[0];
+            measurement(8,0) = acc[1];
+            measurement(9,0) = acc[2];
+            measurement(10,0) = deltaPos[0];
+            measurement(11,0) = deltaPos[1];
+            measurement(12,0) = deltaPos[2];
+            measurement(13,0) = deltaVel[0];
+            measurement(14,0) = deltaVel[1];
+            measurement(15,0) = deltaVel[2];
 
-            Eigen::Matrix3d RDeriv = (newR - oldR) / deltaT;
-            Eigen::Matrix3d RTranspose = newR.transpose();
-
-            Eigen::Matrix3d omegaHat = RDeriv * RTranspose;
-
-            Eigen::Vector3d oldVel{
-                KF.statePost.at<float>(3),
-                KF.statePost.at<float>(4),
-                KF.statePost.at<float>(5)
-            };
-
-            Eigen::Vector3d newVel{
-                KF.statePre.at<float>(3),
-                KF.statePre.at<float>(4),
-                KF.statePre.at<float>(5)
-            };
-
-            Eigen::Vector3d velDeriv = (newVel - oldVel) / deltaT;
+            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
             Eigen:Matrix<double, 6, 1> h;
             h <<
-                -omegaHat(1, 2),
-                omegaHat(0, 2),
-                -omegaHat(0, 1),
-                velDeriv.x(),
-                velDeriv.y(),
-                velDeriv.z();
-
+                gyro[0],
+                gyro[1],
+                gyro[2],
+                acc[0],
+                acc[1],
+                acc[2];
         }
         else
         {
             Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
             Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+            Eigen::Quaterniond imuQuat{
+                tempImuData.rotQuat[0],
+                tempImuData.rotQuat[1],
+                tempImuData.rotQuat[2],
+                tempImuData.rotQuat[3]
+                };
 
-            measurement(0,0) = gyro[0];
-            measurement(1,0) = gyro[1];
-            measurement(2,0) = gyro[2];
-            measurement(3,0) = acc[0];
-            measurement(4,0) = acc[1];
-            measurement(5,0) = acc[2];
+            imuQuat.normalize();
+            Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
+            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
-            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, deltaRot);
-            
-            GImu.block<3,3>(0,0) = deltaRot;
-            GImu.block<3,1>(0,3) = deltaPos;
+            measurement(0,0) = imuQuat.w();
+            measurement(1,0) = imuQuat.x();
+            measurement(2,0) = imuQuat.y();
+            measurement(3,0) = imuQuat.z();
+            measurement(4,0) = gyro[0];
+            measurement(5,0) = gyro[1];
+            measurement(6,0) = gyro[2];
+            measurement(7,0) = acc[0];
+            measurement(8,0) = acc[1];
+            measurement(9,0) = acc[2];
+            measurement(10,0) = deltaPos[0];
+            measurement(11,0) = deltaPos[1];
+            measurement(12,0) = deltaPos[2];
+            measurement(13,0) = deltaVel[0];
+            measurement(14,0) = deltaVel[1];
+            measurement(15,0) = deltaVel[2];
 
-            Eigen::Quaterniond tempQuat(deltaRot);
-
-            KF.statePost.at<float>(0) = deltaPos[0];
-            KF.statePost.at<float>(1) = deltaPos[1];
-            KF.statePost.at<float>(2) = deltaPos[2];
-            KF.statePost.at<float>(3) = deltaVel[0];
-            KF.statePost.at<float>(4) = deltaVel[1];
-            KF.statePost.at<float>(5) = deltaVel[2];
-            KF.statePost.at<float>(6) = tempQuat.w();
-            KF.statePost.at<float>(7) = tempQuat.x();
-            KF.statePost.at<float>(8) = tempQuat.y();
-            KF.statePost.at<float>(9) = tempQuat.z();
+            KF.statePost.at<float>(0) = measurement(0,0);
+            KF.statePost.at<float>(1) = measurement(1,0);
+            KF.statePost.at<float>(2) = measurement(2,0);
+            KF.statePost.at<float>(3) = measurement(3,0);
+            KF.statePost.at<float>(4) = measurement(4,0);
+            KF.statePost.at<float>(5) = measurement(5,0);
+            KF.statePost.at<float>(6) = measurement(6,0);
+            KF.statePost.at<float>(7) = measurement(7,0);
+            KF.statePost.at<float>(8) = measurement(8,0);
+            KF.statePost.at<float>(9) = measurement(9,0);
+            KF.statePost.at<float>(10) = measurement(10,0);
+            KF.statePost.at<float>(11) = measurement(11,0);
+            KF.statePost.at<float>(12) = measurement(12,0);
+            KF.statePost.at<float>(13) = measurement(13,0);
+            KF.statePost.at<float>(14) = measurement(14,0);
+            KF.statePost.at<float>(15) = measurement(15,0);
         }
         
         /*wHat = getWHat(gyro);
@@ -438,7 +471,7 @@ void runIMUPrediction()
         
         GImu = (identity4x4 + chi * deltaT) * GImuOld;*/
 
-        GImu.block<3,3>(0,0) = deltaRot;
+        GImu.block<3,3>(0,0) = imuRot;
         GImu.block<3,1>(0,3) = deltaPos;
 
         std::cout << "GImu:\n"<< GImu << std::endl << std::endl;
@@ -450,7 +483,7 @@ void runIMUPrediction()
         Eigen::Vector3d rotationVectorOriginal = QuatToRotVectEigen(tempOriginalQuat);
         std::cout << "rotationVectorOriginal:\n"<< rotationVectorOriginal << std::endl << std::endl;
 
-        Eigen::Quaterniond tempQuat(deltaRot);
+        Eigen::Quaterniond tempQuat(imuRot);
         Eigen::Vector3d rotationVector = QuatToRotVectEigen(tempQuat);
         std::cout << "rotationVector:\n"<< rotationVector << std::endl << std::endl;
 

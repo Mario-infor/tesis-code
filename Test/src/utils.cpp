@@ -32,7 +32,7 @@ cv::Vec3d QuatToRotVect(glm::quat quaternion)
     float y = quaternion.y;
     float z = quaternion.z;
 
-    float vecNorm = acos(w * 2);
+    float vecNorm = 2 * acos(w);
 
     rotVect[0] = x * vecNorm / sin(vecNorm / 2);
     rotVect[1] = y * vecNorm / sin(vecNorm / 2);

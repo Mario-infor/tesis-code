@@ -44,7 +44,7 @@ void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
 // Method to predict the next state of the imu data.
 void imuPreintegration(const float deltaT, const Eigen::Vector3d acc,
  const Eigen::Vector3d gyro, Eigen::Vector3d &deltaPos, Eigen::Vector3d &deltaVel,
- Eigen::Matrix3d &deltaRot);
+ Eigen::Matrix3d imuRot);
 
 // Method to predict and correct the state of the camera data.
 void runKalmanFilterCamera();
