@@ -385,3 +385,16 @@ void normalizeDataSet(
     }
 }
 
+cv::Mat convertEigenMatToOpencvMat(Eigen::Matrix3d eigenMat)
+{
+    cv::Mat opencvMat = cv::Mat::zeros(eigenMat.rows(), eigenMat.cols(), CV_32F);
+
+    for (int i = 0; i < eigenMat.rows(); i++)
+    {
+        for (int j = 0; j < eigenMat.cols(); j++)
+        {
+            opencvMat.at<float>(i, j) = eigenMat(i, j);
+        }
+    }
+}
+

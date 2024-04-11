@@ -145,20 +145,9 @@ void imuThreadJetson()
     std::cout << "IMU Thread Finished." << std::endl;
 }
 
-void initKalmanFilter(cv::KalmanFilter &KF)
+void initKalmanFilter(cv::KalmanFilter &KF, int stateSize)
 {
-    KF.statePre.at<float>(0) = 0;  // x traslation.
-    KF.statePre.at<float>(1) = 0;  // y traslation.
-    KF.statePre.at<float>(2) = 0;  // z traslation.
-    KF.statePre.at<float>(3) = 0;  // x rotation.
-    KF.statePre.at<float>(4) = 0;  // y rotation.
-    KF.statePre.at<float>(5) = 0;  // z rotation.
-    KF.statePre.at<float>(6) = 0;  // x traslation velocity.
-    KF.statePre.at<float>(7) = 0;  // y traslation velocity.
-    KF.statePre.at<float>(8) = 0;  // z traslation velocity.
-    KF.statePre.at<float>(9) = 0;  // x rotation velocity.
-    KF.statePre.at<float>(10) = 0; // y rotation velocity.
-    KF.statePre.at<float>(11) = 0; // z rotation velocity.
+    KF.statePre = cv::Mat::zeros(stateSize, 1, CV_32F);
     
     cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));     // Q.
     cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2)); // R.
@@ -201,6 +190,19 @@ void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
     KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * KF.measurementMatrix) * KF.errorCovPre;
 }
 
+void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 13, 1> measurement)
+{
+    cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
+    KF.gain = KF.errorCovPre * KF.measurementMatrix.t() * S.inv();
+
+    int stateSize = KF.statePre.rows;
+
+    cv::Mat tempMeasurement = convertEigenMatToOpencvMat(measurement);
+
+    KF.statePost = KF.statePre + KF.gain * (tempMeasurement - KF.statePre);
+    KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * KF.measurementMatrix) * KF.errorCovPre;
+}
+
 void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
 {
     KF.transitionMatrix =
@@ -217,6 +219,31 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
         0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+}
+
+void updateTransitionMatrixIMU(cv::KalmanFilter &KF, float deltaT)
+{
+    float dT2 = deltaT / 2;
+    float w1 = KF.statePost.at<float>(0);
+    float w2 = KF.statePost.at<float>(1);
+    float w3 = KF.statePost.at<float>(2);
+
+
+    KF.transitionMatrix =
+        (cv::Mat_<float>(13, 13) << 
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w3, dT2*w3, -dT2*w1, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1);
 }
 
 void updateMeasurementMatrix(cv::KalmanFilter &KF)
@@ -293,11 +320,13 @@ void runIMUPrediction()
 
     bool firstRun = true;
     float deltaT = -1;
-    cv::KalmanFilter KF(16, 16, 0);
+    cv::KalmanFilter KF(13, 13, 0);
     float cumulativeDeltaT = 0;
 
-    Eigen::Matrix<double, 16, 1> measurement;
+    Eigen::Matrix<double, 13, 1> measurement;
     measurement.setZero();
+
+    initKalmanFilter(KF, 13);
 
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
@@ -319,49 +348,13 @@ void runIMUPrediction()
         if (!firstRun)
         {
             /////////////////////////// Prediction ////////////////////////////////////
-            Eigen::Quaterniond stateQuat{
-                KF.statePost.at<float>(0),
-                KF.statePost.at<float>(1),
-                KF.statePost.at<float>(2),
-                KF.statePost.at<float>(3)
-            };
-            stateQuat.normalize();
-            Eigen::Matrix3d stateRot = stateQuat.toRotationMatrix();
-            Eigen::Vector3d stateGyro{
-                KF.statePost.at<float>(4),
-                KF.statePost.at<float>(5),
-                KF.statePost.at<float>(6)
-            };
-
-            Eigen::Matrix3d stateWHat = getWHat(stateGyro);
-            Eigen::Matrix3d estimatedStateRot = stateRot + stateWHat * stateRot * deltaT;
-            Eigen::Quaterniond estimatedStateQuat(estimatedStateRot);
-
-            Eigen::Vector3d statePos{
-                KF.statePost.at<float>(10),
-                KF.statePost.at<float>(11),
-                KF.statePost.at<float>(12)
-            };
-
-            Eigen::Vector3d stateVel{
-                KF.statePost.at<float>(13),
-                KF.statePost.at<float>(14),
-                KF.statePost.at<float>(15)
-            };
-
-            Eigen::Vector3d estimatedStatePos = statePos + stateVel * deltaT;
             
-            KF.statePre = KF.statePost;
-            KF.statePre.at<float>(0) = estimatedStateQuat.w();
-            KF.statePre.at<float>(1) = estimatedStateQuat.x();
-            KF.statePre.at<float>(2) = estimatedStateQuat.y();
-            KF.statePre.at<float>(3) = estimatedStateQuat.z();
+            updateTransitionMatrixIMU(KF, deltaT);
 
-            KF.statePre.at<float>(10) = estimatedStatePos.x();
-            KF.statePre.at<float>(11) = estimatedStatePos.y();
-            KF.statePre.at<float>(12) = estimatedStatePos.z();
+            predict(KF);
 
-            //KF.errorCovPre = transitionFunctionError();
+            deltaT = tempImuData.time - imuReadVector.at(i-1).time;
+            cumulativeDeltaT += deltaT;
 
             /////////////////////////// Measurenment ////////////////////////////////////
 
@@ -376,37 +369,31 @@ void runIMUPrediction()
 
             imuQuat.normalize();
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
+            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
-            measurement(0,0) = imuQuat.w();
-            measurement(1,0) = imuQuat.x();
-            measurement(2,0) = imuQuat.y();
-            measurement(3,0) = imuQuat.z();
-            measurement(4,0) = gyro[0];
-            measurement(5,0) = gyro[1];
-            measurement(6,0) = gyro[2];
-            measurement(7,0) = acc[0];
-            measurement(8,0) = acc[1];
-            measurement(9,0) = acc[2];
+            measurement(0,0) = gyro[0];
+            measurement(1,0) = gyro[1];
+            measurement(2,0) = gyro[2];
+            measurement(3,0) = imuQuat.w();
+            measurement(4,0) = imuQuat.x();
+            measurement(5,0) = imuQuat.y();
+            measurement(6,0) = imuQuat.z();
+            measurement(7,0) = deltaVel[0];
+            measurement(8,0) = deltaVel[1];
+            measurement(9,0) = deltaVel[2];
             measurement(10,0) = deltaPos[0];
             measurement(11,0) = deltaPos[1];
             measurement(12,0) = deltaPos[2];
-            measurement(13,0) = deltaVel[0];
-            measurement(14,0) = deltaVel[1];
-            measurement(15,0) = deltaVel[2];
 
-            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, imuRot);
+            /////////////////////////// Update ////////////////////////////////////
 
-            Eigen:Matrix<double, 6, 1> h;
-            h <<
-                gyro[0],
-                gyro[1],
-                gyro[2],
-                acc[0],
-                acc[1],
-                acc[2];
+            correctIMU(KF, measurement);
         }
         else
         {
+            deltaT = tempImuData.time - imuReadVector.at(i-1).time;
+            cumulativeDeltaT += deltaT;
+
             Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
             Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
             Eigen::Quaterniond imuQuat{
@@ -420,22 +407,20 @@ void runIMUPrediction()
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
             imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
-            measurement(0,0) = imuQuat.w();
-            measurement(1,0) = imuQuat.x();
-            measurement(2,0) = imuQuat.y();
-            measurement(3,0) = imuQuat.z();
-            measurement(4,0) = gyro[0];
-            measurement(5,0) = gyro[1];
-            measurement(6,0) = gyro[2];
-            measurement(7,0) = acc[0];
-            measurement(8,0) = acc[1];
-            measurement(9,0) = acc[2];
+            measurement(0,0) = gyro[0];
+            measurement(1,0) = gyro[1];
+            measurement(2,0) = gyro[2];
+            measurement(3,0) = imuQuat.w();
+            measurement(4,0) = imuQuat.x();
+            measurement(5,0) = imuQuat.y();
+            measurement(6,0) = imuQuat.z();
+            measurement(7,0) = deltaVel[0];
+            measurement(8,0) = deltaVel[1];
+            measurement(9,0) = deltaVel[2];
             measurement(10,0) = deltaPos[0];
             measurement(11,0) = deltaPos[1];
             measurement(12,0) = deltaPos[2];
-            measurement(13,0) = deltaVel[0];
-            measurement(14,0) = deltaVel[1];
-            measurement(15,0) = deltaVel[2];
+            
 
             KF.statePost.at<float>(0) = measurement(0,0);
             KF.statePost.at<float>(1) = measurement(1,0);
@@ -450,9 +435,6 @@ void runIMUPrediction()
             KF.statePost.at<float>(10) = measurement(10,0);
             KF.statePost.at<float>(11) = measurement(11,0);
             KF.statePost.at<float>(12) = measurement(12,0);
-            KF.statePost.at<float>(13) = measurement(13,0);
-            KF.statePost.at<float>(14) = measurement(14,0);
-            KF.statePost.at<float>(15) = measurement(15,0);
         }
         
         /*wHat = getWHat(gyro);
@@ -529,7 +511,7 @@ void runKalmanFilterCamera()
     measurementOld.setTo(cv::Scalar(0));
 
     // Initialize Kalman Filter.
-    initKalmanFilter(KF);
+    initKalmanFilter(KF, 12);
 
     std::vector<CameraInput> cameraData = readDataCamera();
 
