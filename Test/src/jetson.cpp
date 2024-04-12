@@ -191,7 +191,7 @@ void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
     KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * KF.measurementMatrix) * KF.errorCovPre;
 }
 
-void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 13, 1> measurement)
+void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1> measurement)
 {
     cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
     KF.gain = KF.errorCovPre * KF.measurementMatrix.t() * S.inv();
@@ -222,32 +222,38 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 }
 
-void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 13, 1> measurenment, float deltaT)
+void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1> measurenment, float deltaT)
 {
     float dT2 = deltaT / 2;
-    //float w1 = KF.statePost.at<float>(0);
-    //float w2 = KF.statePost.at<float>(1);
-    //float w3 = KF.statePost.at<float>(2);
+    float w1 = KF.statePost.at<float>(0);
+    float w2 = KF.statePost.at<float>(1);
+    float w3 = KF.statePost.at<float>(2);
 
-    float w1 = measurenment(0,0);
-    float w2 = measurenment(1,0);
-    float w3 = measurenment(2,0);
+    //float w1 = measurenment(0,0);
+    //float w2 = measurenment(1,0);
+    //float w3 = measurenment(2,0);
 
     KF.transitionMatrix =
-        (cv::Mat_<float>(13, 13) << 
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, dT2*w3, dT2*w3, -dT2*w1, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1);
+        (cv::Mat_<float>(19, 19) << 
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        0, 0, 0, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w3, dT2*w3, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
+        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 }
 
 void updateMeasurementMatrix(cv::KalmanFilter &KF)
@@ -322,18 +328,21 @@ void runIMUPrediction()
     Eigen::Vector3d oldAngularVelocity;
     oldAngularVelocity.setZero();
 
+    Eigen::Vector3d oldLinealAcc;
+    oldLinealAcc.setZero();
+
     Eigen::Matrix4d identity4x4;
     identity4x4.setIdentity();
 
     bool firstRun = true;
     float deltaT = -1;
-    cv::KalmanFilter KF(13, 13, 0);
+    cv::KalmanFilter KF(19, 19, 0);
     float cumulativeDeltaT = 0;
 
-    Eigen::Matrix<double, 13, 1> measurement;
+    Eigen::Matrix<double, 19, 1> measurement;
     measurement.setZero();
 
-    initKalmanFilter(KF, 13);
+    initKalmanFilter(KF, 19);
 
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
@@ -378,7 +387,7 @@ void runIMUPrediction()
 
             imuQuat.normalize();
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
-            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, imuRot);
+            imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
             measurement(0,0) = gyro[0];
             measurement(1,0) = gyro[1];
@@ -393,8 +402,17 @@ void runIMUPrediction()
             measurement(10,0) = deltaPos[0];
             measurement(11,0) = deltaPos[1];
             measurement(12,0) = deltaPos[2];
+            measurement(13,0) = (gyro[0] - oldAngularVelocity[0]) / deltaT;
+            measurement(14,0) = (gyro[1] - oldAngularVelocity[1]) / deltaT;
+            measurement(15,0) = (gyro[2] - oldAngularVelocity[2]) / deltaT;
+            measurement(16,0) = acc[0];
+            measurement(17,0) = acc[1];
+            measurement(18,0) = acc[2];
 
             std::cout << "measurement:\n" << measurement << endl << endl;
+
+            oldAngularVelocity = gyro;
+            oldLinealAcc = acc;
 
             /////////////////////////// Update ////////////////////////////////////
 
@@ -418,7 +436,7 @@ void runIMUPrediction()
 
             imuQuat.normalize();
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
-            imuPreintegration(cumulativeDeltaT, acc, gyro, deltaPos, deltaVel, imuRot);
+            imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
             measurement(0,0) = gyro[0];
             measurement(1,0) = gyro[1];
@@ -433,7 +451,12 @@ void runIMUPrediction()
             measurement(10,0) = deltaPos[0];
             measurement(11,0) = deltaPos[1];
             measurement(12,0) = deltaPos[2];
-            
+            measurement(13,0) = 0;
+            measurement(14,0) = 0;
+            measurement(15,0) = 0;
+            measurement(16,0) = acc[0];
+            measurement(17,0) = acc[1];
+            measurement(18,0) = acc[2];
 
             KF.statePost.at<float>(0) = measurement(0,0);
             KF.statePost.at<float>(1) = measurement(1,0);
@@ -448,8 +471,15 @@ void runIMUPrediction()
             KF.statePost.at<float>(10) = measurement(10,0);
             KF.statePost.at<float>(11) = measurement(11,0);
             KF.statePost.at<float>(12) = measurement(12,0);
+            KF.statePost.at<float>(13) = measurement(13,0);
+            KF.statePost.at<float>(14) = measurement(14,0);
+            KF.statePost.at<float>(15) = measurement(15,0);
+            KF.statePost.at<float>(16) = measurement(16,0);
+            KF.statePost.at<float>(17) = measurement(17,0);
+            KF.statePost.at<float>(18) = measurement(18,0);
 
             oldAngularVelocity = gyro;
+            oldLinealAcc = acc;
 
             firstRun = false;
         }
@@ -488,8 +518,14 @@ void runIMUPrediction()
 
         Eigen::Vector3d VelOriginal{measurement(7,0), measurement(8,0), measurement(9,0)};
         Eigen::Vector3d VelKF{KF.statePost.at<float>(7), KF.statePost.at<float>(8), KF.statePost.at<float>(9)};
+        
+        Eigen::Vector3d PosOriginal{measurement(10,0), measurement(11,0), measurement(12,0)};
+        Eigen::Vector3d PosKF{KF.statePost.at<float>(10), KF.statePost.at<float>(11), KF.statePost.at<float>(12)};
 
-        if (vectorOfPointsOne.size() > 100)
+        Eigen::Vector3d AccOriginal{measurement(13,0), measurement(14,0), measurement(15,0)};
+        Eigen::Vector3d AccKF{KF.statePost.at<float>(13), KF.statePost.at<float>(14), KF.statePost.at<float>(15)};
+
+        if (vectorOfPointsOne.size() > 50)
         {
             vectorOfPointsOne.erase(vectorOfPointsOne.begin());
             vectorOfPointsTwo.erase(vectorOfPointsTwo.begin());
