@@ -89,6 +89,6 @@ Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT);
 
 void normalizeDataSet(std::vector<Eigen::Vector3d> points, std::vector<float> &result, int variable);
 
-cv::Mat convertEigenMatToOpencvMat(Eigen::Matrix3d eigenMat)
+cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat);
 
 #endif // UTILS_H

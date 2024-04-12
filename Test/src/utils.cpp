@@ -241,6 +241,8 @@ void gnuPrintImuPreintegration(
     fprintf(output, "set ylabel \"y\"\n");
     fprintf(output, "set zlabel \"z\"\n");
     fprintf(output, "set ticslevel 3.\n");
+    //fprintf(output, "set xrange [-0.5:0.5]\n");
+    //fprintf(output, "set yrange [-0.5:0.5]\n");
 
     fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Original', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'Prediction'\n");
     
@@ -262,7 +264,7 @@ void gnuPrintImuPreintegration(
     fflush(output);
     fprintf(output, "e\n");
     
-    usleep(500000);
+    usleep(100000);
 }
 
 void gnuPrintImuCompareValues(
@@ -385,7 +387,7 @@ void normalizeDataSet(
     }
 }
 
-cv::Mat convertEigenMatToOpencvMat(Eigen::Matrix3d eigenMat)
+cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat)
 {
     cv::Mat opencvMat = cv::Mat::zeros(eigenMat.rows(), eigenMat.cols(), CV_32F);
 
@@ -396,5 +398,7 @@ cv::Mat convertEigenMatToOpencvMat(Eigen::Matrix3d eigenMat)
             opencvMat.at<float>(i, j) = eigenMat(i, j);
         }
     }
+
+    return opencvMat;
 }
 

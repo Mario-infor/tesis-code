@@ -41,7 +41,7 @@ void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 13, 1> measurement);
 void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 
 // Update the transition matrix (A) for IMU KF with new deltaT and gyro values.
-void updateTransitionMatrixIMU(cv::KalmanFilter &KF, float deltaT);
+void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 13, 1> measurenment, float deltaT);
 
 // Initialisation of statePost the first time when no prediction have been made.
 void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
