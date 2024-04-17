@@ -46,19 +46,25 @@ Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion)
 {
     Eigen::Vector3d rotVect;
 
-    float w = quaternion.w();
-    float x = quaternion.x();
-    float y = quaternion.y();
-    float z = quaternion.z();
+    float q0 = quaternion.w();
+    float q1 = quaternion.x();
+    float q2 = quaternion.y();
+    float q3 = quaternion.z();
 
-    float vecNorm = 2 * acos(w);
+    /*float vecNorm = 2 * acos(w);
 
     rotVect[0] = x * vecNorm / sin(vecNorm / 2);
     rotVect[1] = y * vecNorm / sin(vecNorm / 2);
-    rotVect[2] = z * vecNorm / sin(vecNorm / 2);
+    rotVect[2] = z * vecNorm / sin(vecNorm / 2);*/
+
+    rotVect[0] = atan2(2 * (q1*q2 + q0*q3), q0*q0 + q1*q1 - q2*q2 - q3*q3);
+    rotVect[1] = asin(-2 * (q1*q3 - q0*q2));
+    rotVect[2] = atan2(2 * (q2*q3 + q0*q1), q0*q0 - q1*q1 - q2*q2 + q3*q3);
 
     return rotVect;
 }
+
+
 
 // Create a hard copy of camera vector.
 std::vector<CameraInput> hardCopyCameraVector(

@@ -149,7 +149,11 @@ void initKalmanFilter(cv::KalmanFilter &KF, int stateSize)
 {
     KF.statePre = cv::Mat::zeros(stateSize, 1, CV_32F);
     
-    cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-2));     // Q.
+    cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));     // Q.
+    KF.processNoiseCov.at<float>(3,3) = 0;
+    KF.processNoiseCov.at<float>(4,4) = 0;
+    KF.processNoiseCov.at<float>(5,5) = 0;
+    KF.processNoiseCov.at<float>(6,6) = 0;
     cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2)); // R.
     cv::setIdentity(KF.errorCovPost, cv::Scalar::all(1));           // P'.
     cv::setIdentity(KF.transitionMatrix, cv::Scalar::all(1));       // A.
@@ -160,6 +164,9 @@ void predict(cv::KalmanFilter &KF)
 {
     KF.statePre = KF.transitionMatrix * KF.statePost;
     KF.errorCovPre = KF.transitionMatrix * KF.errorCovPost * KF.transitionMatrix.t() + KF.processNoiseCov;
+
+    std::cout << "KF.processNoiseCov:\n" << KF.processNoiseCov << endl << endl;
+
 }
 
 void doMeasurement(cv::Mat_<float> &measurement, cv::Mat_<float> measurementOld,
@@ -238,7 +245,7 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1
     //float w2 = measurenment(1,0);
     //float w3 = measurenment(2,0);
 
-    /*KF.transitionMatrix =
+    KF.transitionMatrix =
         (cv::Mat_<float>(19, 19) << 
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
@@ -246,29 +253,7 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1
         0, 0, 0, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, dT2*w3, dT2*w3, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
-        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);*/
-
-    KF.transitionMatrix =
-        (cv::Mat_<float>(19, 19) << 
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
-        -dT2*q1, -dT2*q2, -dT2*q3, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        dT2*q0, -dT2*q3, dT2*q2, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        dT2*q3, dT2*q0, -dT2*q1, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        -dT2*q2, dT2*q1, dT2*q0, dT2*w3, dT2*w3, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w3, dT2*w2, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
@@ -282,6 +267,28 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 
+    /*KF.transitionMatrix =
+        (cv::Mat_<float>(19, 19) << 
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        -dT2*q1, -dT2*q2, -dT2*q3, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        dT2*q0, -dT2*q3, dT2*q2, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        dT2*q3, dT2*q0, -dT2*q1, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        -dT2*q2, dT2*q1, dT2*q0, dT2*w3, dT2*w2, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
+        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+*/
         // x4 -> q0
         // x5 -> q1
         // x6 -> q2
