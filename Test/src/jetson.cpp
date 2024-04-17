@@ -149,7 +149,7 @@ void initKalmanFilter(cv::KalmanFilter &KF, int stateSize)
 {
     KF.statePre = cv::Mat::zeros(stateSize, 1, CV_32F);
     
-    cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));     // Q.
+    cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-2));     // Q.
     cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2)); // R.
     cv::setIdentity(KF.errorCovPost, cv::Scalar::all(1));           // P'.
     cv::setIdentity(KF.transitionMatrix, cv::Scalar::all(1));       // A.
@@ -229,11 +229,16 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1
     float w2 = KF.statePost.at<float>(1);
     float w3 = KF.statePost.at<float>(2);
 
+    float q0 = KF.statePost.at<float>(3);
+    float q1 = KF.statePost.at<float>(4);
+    float q2 = KF.statePost.at<float>(5);
+    float q3 = KF.statePost.at<float>(6);
+
     //float w1 = measurenment(0,0);
     //float w2 = measurenment(1,0);
     //float w3 = measurenment(2,0);
 
-    KF.transitionMatrix =
+    /*KF.transitionMatrix =
         (cv::Mat_<float>(19, 19) << 
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
@@ -253,7 +258,34 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);*/
+
+    KF.transitionMatrix =
+        (cv::Mat_<float>(19, 19) << 
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        -dT2*q1, -dT2*q2, -dT2*q3, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        dT2*q0, -dT2*q3, dT2*q2, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        dT2*q3, dT2*q0, -dT2*q1, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        -dT2*q2, dT2*q1, dT2*q0, dT2*w3, dT2*w3, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
+        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+
+        // x4 -> q0
+        // x5 -> q1
+        // x6 -> q2
+        // x7 -> q3
 }
 
 void updateMeasurementMatrix(cv::KalmanFilter &KF)
@@ -385,7 +417,7 @@ void runIMUPrediction()
                 tempImuData.rotQuat[3]
                 };
 
-            imuQuat.normalize();
+            //imuQuat.normalize();
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
             imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
@@ -434,7 +466,7 @@ void runIMUPrediction()
                 tempImuData.rotQuat[3]
                 };
 
-            imuQuat.normalize();
+            //imuQuat.normalize();
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
             imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
@@ -451,12 +483,12 @@ void runIMUPrediction()
             measurement(10,0) = deltaPos[0];
             measurement(11,0) = deltaPos[1];
             measurement(12,0) = deltaPos[2];
-            measurement(13,0) = 0;
-            measurement(14,0) = 0;
-            measurement(15,0) = 0;
-            measurement(16,0) = acc[0];
-            measurement(17,0) = acc[1];
-            measurement(18,0) = acc[2];
+            measurement(13,0) = 0; // angular acc x
+            measurement(14,0) = 0; // angular acc y
+            measurement(15,0) = 0; // angular acc z
+            measurement(16,0) = acc[0]; // lineal acc x
+            measurement(17,0) = acc[1]; // lineal acc y
+            measurement(18,0) = acc[2]; // lineal acc z
 
             KF.statePost.at<float>(0) = measurement(0,0);
             KF.statePost.at<float>(1) = measurement(1,0);
@@ -504,14 +536,16 @@ void runIMUPrediction()
         GImu.block<3,1>(0,3) = deltaPos;
 
         Eigen::Quaterniond tempOriginalQuat = {tempImuData.rotQuat[0], tempImuData.rotQuat[1], tempImuData.rotQuat[2], tempImuData.rotQuat[3]};
-        tempOriginalQuat.normalize();
-
+        //tempOriginalQuat.normalize();
         Eigen::Vector3d rotationVectorOriginal = QuatToRotVectEigen(tempOriginalQuat);
 
         Eigen::Quaterniond tempQuat = {KF.statePost.at<float>(3), KF.statePost.at<float>(4), KF.statePost.at<float>(5), KF.statePost.at<float>(6)};
-        tempQuat.normalize();
-
+        //tempQuat.normalize();
         Eigen::Vector3d rotationVector = QuatToRotVectEigen(tempQuat);
+
+        float quatDiff = (tempOriginalQuat.coeffs() - tempQuat.coeffs()).norm();
+
+        std::cout << "Quat Diff: " << quatDiff << std::endl;
 
         Eigen::Vector3d GyroOriginal{measurement(0,0), measurement(1,0), measurement(2,0)};
         Eigen::Vector3d GyroKF{KF.statePost.at<float>(0), KF.statePost.at<float>(1), KF.statePost.at<float>(2)};
@@ -522,8 +556,11 @@ void runIMUPrediction()
         Eigen::Vector3d PosOriginal{measurement(10,0), measurement(11,0), measurement(12,0)};
         Eigen::Vector3d PosKF{KF.statePost.at<float>(10), KF.statePost.at<float>(11), KF.statePost.at<float>(12)};
 
-        Eigen::Vector3d AccOriginal{measurement(13,0), measurement(14,0), measurement(15,0)};
-        Eigen::Vector3d AccKF{KF.statePost.at<float>(13), KF.statePost.at<float>(14), KF.statePost.at<float>(15)};
+        Eigen::Vector3d AccAngOriginal{measurement(13,0), measurement(14,0), measurement(15,0)};
+        Eigen::Vector3d AccAngKF{KF.statePost.at<float>(13), KF.statePost.at<float>(14), KF.statePost.at<float>(15)};
+
+        Eigen::Vector3d AccLinOriginal{measurement(16,0), measurement(17,0), measurement(18,0)};
+        Eigen::Vector3d AccLinKF{KF.statePost.at<float>(16), KF.statePost.at<float>(17), KF.statePost.at<float>(18)};
 
         if (vectorOfPointsOne.size() > 50)
         {
