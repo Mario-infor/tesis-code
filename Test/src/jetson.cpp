@@ -473,7 +473,6 @@ void runIMUPrediction()
                 tempImuData.rotQuat[3]
                 };
 
-            //imuQuat.normalize();
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
             imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, imuRot);
 
@@ -524,18 +523,14 @@ void runIMUPrediction()
         }
         
         /*wHat = getWHat(gyro);
-        std::cout << "wHat:\n"<< wHat << std::endl << std::endl;
 
         calVelocity = deltaVel - wHat * deltaPos;
-        std::cout << "calVelocity:\n"<< calVelocity << std::endl << std::endl;
         
         chi <<
         wHat(0,0), wHat(0,1), wHat(0,2), calVelocity(0),
         wHat(1,0), wHat(1,1), wHat(1,2), calVelocity(1),
         wHat(2,0), wHat(2,1), wHat(2,2), calVelocity(2),
         0, 0, 0, 0;
-
-        std::cout << "chi:\n"<< chi << std::endl << std::endl;
         
         GImu = (identity4x4 + chi * deltaT) * GImuOld;*/
 
@@ -543,11 +538,9 @@ void runIMUPrediction()
         GImu.block<3,1>(0,3) = deltaPos;
 
         Eigen::Quaterniond tempOriginalQuat = {tempImuData.rotQuat[0], tempImuData.rotQuat[1], tempImuData.rotQuat[2], tempImuData.rotQuat[3]};
-        //tempOriginalQuat.normalize();
         Eigen::Vector3d rotationVectorOriginal = QuatToRotVectEigen(tempOriginalQuat);
 
         Eigen::Quaterniond tempQuat = {KF.statePost.at<float>(3), KF.statePost.at<float>(4), KF.statePost.at<float>(5), KF.statePost.at<float>(6)};
-        //tempQuat.normalize();
         Eigen::Vector3d rotationVector = QuatToRotVectEigen(tempQuat);
 
         float quatDiff = (tempOriginalQuat.coeffs() - tempQuat.coeffs()).norm();
@@ -575,12 +568,10 @@ void runIMUPrediction()
             vectorOfPointsTwo.erase(vectorOfPointsTwo.begin());
         }
 
-        vectorOfPointsOne.push_back(rotationVectorOriginal);
-        vectorOfPointsTwo.push_back(rotationVector);
+        vectorOfPointsOne.push_back(PosOriginal);
+        vectorOfPointsTwo.push_back(PosKF);
 
         gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
-
-        //GImuOld = GImu;
     }
 
     /*std::vector<float> normalizedOriginals;
