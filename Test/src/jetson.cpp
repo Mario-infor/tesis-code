@@ -399,6 +399,9 @@ void runIMUPrediction()
     float cumulativeDeltaT = 0;
     float oldDeltaT = 0;
     int ignoredTimes = 0;
+    int validKalmanItes = 0; 
+    float firstPositionMagnitude = 0;
+    float lastPositionMagnitude = 0;
 
     Eigen::Matrix<double, 19, 1> measurement;
     measurement.setZero();
@@ -407,6 +410,9 @@ void runIMUPrediction()
 
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
+
+    int cameraDataSize = cameraData.size();
+    int imuReadVectorSize = imuReadVector.size();
 
     int imuIndex = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
 
@@ -424,20 +430,20 @@ void runIMUPrediction()
         ImuInputJetson tempImuData = imuReadVector.at(i);  
 
         Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
-            Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
-            Eigen::Quaterniond imuQuat{
-                tempImuData.rotQuat[0],
-                tempImuData.rotQuat[1],
-                tempImuData.rotQuat[2],
-                tempImuData.rotQuat[3]
-                };
+        Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+        Eigen::Quaterniond imuQuat{
+            tempImuData.rotQuat[0],
+            tempImuData.rotQuat[1],
+            tempImuData.rotQuat[2],
+            tempImuData.rotQuat[3]
+        };
 
         vectorOfMagnitudesGyro.push_back(gyro.norm());
         vectorOfMagnitudesAcc.push_back(acc.norm());
 
         if (!firstRun)
         {
-            if(gyro.norm() < THRESHOLD_IMU_GYRO_MAX && gyro.norm() > THRESHOLD_IMU_GYRO_MIN)
+            if(gyro.norm() < THRESHOLD_IMU_GYRO)
             {
                 validGyro = false;
             }
@@ -446,7 +452,7 @@ void runIMUPrediction()
                 validGyro = true;
             }
 
-            if(acc.norm() < THRESHOLD_IMU_ACC_MAX && acc.norm() > THRESHOLD_IMU_ACC_MIN)
+            if(acc.norm() < THRESHOLD_IMU_ACC)
             {
                 validAcc = false;
             }
@@ -466,6 +472,7 @@ void runIMUPrediction()
                 std::cout << "KF.statePre:\n" << KF.statePre << endl << endl;
 
                 deltaT = tempImuData.time - oldDeltaT;
+                deltaT /= 1000;
                 cumulativeDeltaT += deltaT;
 
                 /////////////////////////// Measurenment ////////////////////////////////////
@@ -503,6 +510,23 @@ void runIMUPrediction()
 
                 correctIMU(KF, measurement);
 
+                Eigen::Vector3d tempPos{
+                    KF.statePost.at<float>(10),
+                    KF.statePost.at<float>(11),
+                    KF.statePost.at<float>(12)
+                };
+
+                lastPositionMagnitude = tempPos.norm();
+
+                validKalmanItes++;
+
+                if (validKalmanItes == 10)
+                {
+                    std::cout << "First Position Magnitude: " << firstPositionMagnitude << std::endl;
+                    std::cout << "Last Position Magnitude: " << lastPositionMagnitude << std::endl;
+                    std::cout << "Position Difference: " << lastPositionMagnitude - firstPositionMagnitude << std::endl;
+                }
+
                 std::cout << "KF.statePost:\n" << KF.statePost << endl << endl;
             }
             else
@@ -512,7 +536,8 @@ void runIMUPrediction()
         }
         else
         {
-            deltaT = tempImuData.time - oldDeltaT;
+            deltaT = tempImuData.time - imuReadVector.at(i-1).time;
+            deltaT /= 1000;
             cumulativeDeltaT += deltaT;
 
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
@@ -561,6 +586,8 @@ void runIMUPrediction()
             oldAngularVelocity = gyro;
             oldLinealAcc = acc;
             oldDeltaT = tempImuData.time;
+
+            firstPositionMagnitude = deltaPos.norm();
 
             firstRun = false;
         }
@@ -665,6 +692,10 @@ void runIMUPrediction()
     std::cout << "Min Acc: " << minAcc << std::endl;
 
     std::cout << "Ignored Times: " << ignoredTimes << std::endl;
+
+    std::cout << "First Position Magnitude: " << firstPositionMagnitude << std::endl;
+    std::cout << "Last Position Magnitude: " << lastPositionMagnitude << std::endl;
+    std::cout << "Position Difference: " << lastPositionMagnitude - firstPositionMagnitude << std::endl;
 
     /*std::vector<float> normalizedOriginals;
     std::vector<float> normalizedPredictions;
