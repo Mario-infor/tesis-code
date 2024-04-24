@@ -95,6 +95,7 @@
         "specialfunctions": "cpp",
         "splines": "cpp",
         "*.evaluator": "cpp",
-        "*.traits": "cpp"
+        "*.traits": "cpp",
+        "dense": "cpp"
     }
 }

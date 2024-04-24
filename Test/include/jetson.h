@@ -9,6 +9,10 @@
 
 #define RING_BUFFER_LENGTH_CAMERA 375
 #define RING_BUFFER_LENGTH_IMU 1500
+#define THRESHOLD_IMU_ACC_MAX 0.001
+#define THRESHOLD_IMU_ACC_MIN -0.0001
+#define THRESHOLD_IMU_GYRO_MAX 0.07
+#define THRESHOLD_IMU_GYRO_MIN -0.05
 
 // Global variables that need to be accessed from different threads or methods.
 std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;

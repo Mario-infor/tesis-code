@@ -8,9 +8,12 @@
 #include <readWriteData.h>
 #include <RingBuffer.h>
 
-std::string dirCameraFolder = "/home/nvidia/Mario/tesis-code/Test/data/camera/";
-std::string dirIMUFolder = "/home/nvidia/Mario/tesis-code/Test/data/imu/";
+std::string dirCameraFolder = "/home/nvidia/Mario/tesis-code/Test/data/dynamic_data/camera/";
+std::string dirIMUFolder = "/home/nvidia/Mario/tesis-code/Test/data/dynamic_data/imu/";
 std::string dirRotationsFolder = "/home/nvidia/Mario/tesis-code/Test/data/rotations/";
+
+//std::string dirCameraFolder = "/home/nvidia/Mario/tesis-code/Test/data/static_data/camera/";
+//std::string dirIMUFolder = "/home/nvidia/Mario/tesis-code/Test/data/static_data/imu/";
 
 void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
 {
