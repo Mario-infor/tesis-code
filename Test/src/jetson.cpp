@@ -198,7 +198,7 @@ void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
     KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * KF.measurementMatrix) * KF.errorCovPre;
 }
 
-void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1> measurement)
+void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurement)
 {
     cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
     KF.gain = KF.errorCovPre * KF.measurementMatrix.t() * S.inv();
@@ -229,7 +229,7 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 }
 
-void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1> measurenment, float deltaT)
+void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT)
 {
     float dT2 = deltaT / 2;
     float w1 = KF.statePost.at<float>(0);
@@ -242,51 +242,59 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 19, 1
     float q3 = KF.statePost.at<float>(6);
 
     KF.transitionMatrix =
-        (cv::Mat_<float>(19, 19) << 
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
-        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
-        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        (cv::Mat_<float>(23, 23) << 
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
+        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
+        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 
     /*KF.transitionMatrix =
-        (cv::Mat_<float>(19, 19) << 
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
-        0, 0, 0, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, dT2*w3, dT2*w2, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
-        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);*/
+        (cv::Mat_<float>(23, 23) << 
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        0, 0, 0, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
+        0, 0, 0, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
+        0, 0, 0, dT2*w3, dT2*w2, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);*/
 
     /*KF.transitionMatrix =
-        (cv::Mat_<float>(19, 19) << 
+        (cv::Mat_<float>(23, 23) << 
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
         0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
         0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
@@ -391,11 +399,14 @@ void runIMUPrediction()
     Eigen::Matrix4d identity4x4;
     identity4x4.setIdentity();
 
+    Eigen::Quaterniond oldQuat;
+    oldQuat.setIdentity();
+
     bool firstRun = true;
     bool validGyro = true;
     bool validAcc = true;
     float deltaT = -1;
-    cv::KalmanFilter KF(19, 19, 0);
+    cv::KalmanFilter KF(23, 23, 0);
     float cumulativeDeltaT = 0;
     float oldDeltaT = 0;
     int ignoredTimes = 0;
@@ -403,10 +414,10 @@ void runIMUPrediction()
     float firstPositionMagnitude = 0;
     float lastPositionMagnitude = 0;
 
-    Eigen::Matrix<double, 19, 1> measurement;
+    Eigen::Matrix<double, 23, 1> measurement;
     measurement.setZero();
 
-    initKalmanFilter(KF, 19);
+    initKalmanFilter(KF, 23);
 
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
@@ -469,6 +480,19 @@ void runIMUPrediction()
 
                 predict(KF);
 
+                Eigen::Quaterniond quatKFPre{
+                    KF.statePre.at<float>(3),
+                    KF.statePre.at<float>(4),
+                    KF.statePre.at<float>(5),
+                    KF.statePre.at<float>(6)
+                };
+
+                quatKFPre.normalize();
+                KF.statePre.at<float>(3) = quatKFPre.w();
+                KF.statePre.at<float>(4) = quatKFPre.x();
+                KF.statePre.at<float>(5) = quatKFPre.y();
+                KF.statePre.at<float>(6) = quatKFPre.z();
+
                 std::cout << "KF.statePre:\n" << KF.statePre << endl << endl;
 
                 deltaT = tempImuData.time - oldDeltaT;
@@ -499,16 +523,34 @@ void runIMUPrediction()
                 measurement(16,0) = acc[0];
                 measurement(17,0) = acc[1];
                 measurement(18,0) = acc[2];
+                measurement(19,0) = (imuQuat.w() - oldQuat.w()) / deltaT;
+                measurement(20,0) = (imuQuat.x() - oldQuat.x()) / deltaT;
+                measurement(21,0) = (imuQuat.y() - oldQuat.y()) / deltaT;
+                measurement(22,0) = (imuQuat.z() - oldQuat.z()) / deltaT;
 
                 std::cout << "measurement:\n" << measurement << endl << endl;
 
                 oldAngularVelocity = gyro;
                 oldLinealAcc = acc;
                 oldDeltaT = tempImuData.time;
+                oldQuat = imuQuat;
 
                 /////////////////////////// Update ////////////////////////////////////
 
                 correctIMU(KF, measurement);
+
+                Eigen::Quaterniond quatKFPost{
+                    KF.statePost.at<float>(3),
+                    KF.statePost.at<float>(4),
+                    KF.statePost.at<float>(5),
+                    KF.statePost.at<float>(6)
+                };
+
+                quatKFPost.normalize();
+                KF.statePost.at<float>(3) = quatKFPost.w();
+                KF.statePost.at<float>(4) = quatKFPost.x();
+                KF.statePost.at<float>(5) = quatKFPost.y();
+                KF.statePost.at<float>(6) = quatKFPost.z();
 
                 Eigen::Vector3d tempPos{
                     KF.statePost.at<float>(10),
@@ -562,6 +604,10 @@ void runIMUPrediction()
             measurement(16,0) = acc[0]; // lineal acc x
             measurement(17,0) = acc[1]; // lineal acc y
             measurement(18,0) = acc[2]; // lineal acc z
+            measurement(19,0) = 0;
+            measurement(20,0) = 0;
+            measurement(21,0) = 0;
+            measurement(22,0) = 0;
 
             KF.statePost.at<float>(0) = measurement(0,0);
             KF.statePost.at<float>(1) = measurement(1,0);
@@ -582,9 +628,14 @@ void runIMUPrediction()
             KF.statePost.at<float>(16) = measurement(16,0);
             KF.statePost.at<float>(17) = measurement(17,0);
             KF.statePost.at<float>(18) = measurement(18,0);
+            KF.statePost.at<float>(19) = measurement(19,0);
+            KF.statePost.at<float>(20) = measurement(20,0);
+            KF.statePost.at<float>(21) = measurement(21,0);
+            KF.statePost.at<float>(22) = measurement(22,0);
 
             oldAngularVelocity = gyro;
             oldLinealAcc = acc;
+            oldQuat = imuQuat;
             oldDeltaT = tempImuData.time;
 
             firstPositionMagnitude = deltaPos.norm();
@@ -643,7 +694,7 @@ void runIMUPrediction()
             vectorOfPointsOne.push_back(rotationVectorOriginal);
             vectorOfPointsTwo.push_back(rotationVector);
 
-            //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
+            gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo);
         }
     }
 
