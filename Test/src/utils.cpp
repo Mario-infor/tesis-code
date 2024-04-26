@@ -64,8 +64,6 @@ Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion)
     return rotVect;
 }
 
-
-
 // Create a hard copy of camera vector.
 std::vector<CameraInput> hardCopyCameraVector(
     std::vector<CameraInput> cameraReadVector)

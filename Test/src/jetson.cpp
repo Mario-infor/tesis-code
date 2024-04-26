@@ -231,16 +231,6 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
 
 void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT)
 {
-    float dT2 = deltaT / 2;
-    float w1 = KF.statePost.at<float>(0);
-    float w2 = KF.statePost.at<float>(1);
-    float w3 = KF.statePost.at<float>(2);
-
-    float q0 = KF.statePost.at<float>(3);
-    float q1 = KF.statePost.at<float>(4);
-    float q2 = KF.statePost.at<float>(5);
-    float q3 = KF.statePost.at<float>(6);
-
     KF.transitionMatrix =
         (cv::Mat_<float>(23, 23) << 
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -364,6 +354,11 @@ void imuPreintegration(
     deltaVel += imuRot * acc * deltaT;
 }
 
+void runCameraAndIMUKalmanFilter()
+{
+
+}
+
 void runIMUPrediction()
 {
     Eigen::Vector3d deltaPos;
@@ -396,21 +391,18 @@ void runIMUPrediction()
     Eigen::Vector3d oldLinealAcc;
     oldLinealAcc.setZero();
 
-    Eigen::Matrix4d identity4x4;
-    identity4x4.setIdentity();
-
     Eigen::Quaterniond oldQuat;
     oldQuat.setIdentity();
+
+    cv::KalmanFilter KF(23, 23, 0);
 
     bool firstRun = true;
     bool validGyro = true;
     bool validAcc = true;
     float deltaT = -1;
-    cv::KalmanFilter KF(23, 23, 0);
-    float cumulativeDeltaT = 0;
     float oldDeltaT = 0;
     int ignoredTimes = 0;
-    int validKalmanItes = 0; 
+    int validKalmanItes = 0;
     float firstPositionMagnitude = 0;
     float lastPositionMagnitude = 0;
 
@@ -472,8 +464,7 @@ void runIMUPrediction()
                 validAcc = true;
             }
 
-            //if (validGyro || validAcc)
-            if(true)
+            if (validGyro || validAcc)
             {
                 /////////////////////////// Prediction ////////////////////////////////////
             
@@ -498,7 +489,6 @@ void runIMUPrediction()
 
                 deltaT = tempImuData.time - oldDeltaT;
                 deltaT /= 1000;
-                cumulativeDeltaT += deltaT;
 
                 /////////////////////////// Measurenment ////////////////////////////////////
 
@@ -581,7 +571,6 @@ void runIMUPrediction()
         {
             deltaT = tempImuData.time - imuReadVector.at(i-1).time;
             deltaT /= 1000;
-            cumulativeDeltaT += deltaT;
 
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
             imuPreintegration(deltaT, acc, gyro, deltaPos, deltaVel, imuRot);
@@ -605,10 +594,10 @@ void runIMUPrediction()
             measurement(16,0) = acc[0]; // lineal acc x
             measurement(17,0) = acc[1]; // lineal acc y
             measurement(18,0) = acc[2]; // lineal acc z
-            measurement(19,0) = 0;
-            measurement(20,0) = 0;
-            measurement(21,0) = 0;
-            measurement(22,0) = 0;
+            measurement(19,0) = 0; // quat vel w
+            measurement(20,0) = 0; // quat vel x
+            measurement(21,0) = 0; // quat vel y
+            measurement(22,0) = 0; // quat vel z
 
             KF.statePost.at<float>(0) = measurement(0,0);
             KF.statePost.at<float>(1) = measurement(1,0);
@@ -644,21 +633,8 @@ void runIMUPrediction()
             firstRun = false;
         }
         
-        //if (validGyro || validAcc)
-        if(true)
+        if (validGyro || validAcc)
         {
-            /*wHat = getWHat(gyro);
-
-            calVelocity = deltaVel - wHat * deltaPos;
-
-            chi <<
-            wHat(0,0), wHat(0,1), wHat(0,2), calVelocity(0),
-            wHat(1,0), wHat(1,1), wHat(1,2), calVelocity(1),
-            wHat(2,0), wHat(2,1), wHat(2,2), calVelocity(2),
-            0, 0, 0, 0;
-
-            GImu = (identity4x4 + chi * deltaT) * GImuOld;*/
-
             GImu.block<3,3>(0,0) = imuRot;
             GImu.block<3,1>(0,3) = deltaPos;
 
@@ -814,6 +790,16 @@ void runKalmanFilterCamera()
             doMeasurement(measurement, measurementOld, frameMarkersData, deltaT);
             measurementOld = measurement.clone();
 
+            std::cout << "measurement:\n" << measurement << std::endl << std::endl;
+
+            cv::Vec3d drawRvec = {cv::Vec3d(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
+                                             KF.statePost.at<float>(5))};
+
+            cv::Mat rotMat;
+            cv::Rodrigues(drawRvec, rotMat);
+
+            std::cout << "rotMat:\n" << rotMat << std::endl << std::endl;
+
             correct(KF, measurement);
             
             drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
@@ -848,6 +834,16 @@ void runKalmanFilterCamera()
             //initStatePostFirstTime(KF, measurement);
             KF.statePost = measurement.clone();
 
+            std::cout << "measurement:\n" << measurement << std::endl << std::endl;
+
+            cv::Vec3d tempRvec = {cv::Vec3d(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
+                                             KF.statePost.at<float>(5))};
+
+            cv::Mat rotMat;
+            cv::Rodrigues(tempRvec, rotMat);
+
+            std::cout << "rotMat:\n" << rotMat << std::endl << std::endl;
+
             firstRun = false;
         }
     }
@@ -871,8 +867,8 @@ int main()
     }
     else if (runKalmanFilterBool)
     {
-        //runKalmanFilterCamera();
-        runIMUPrediction();
+        runKalmanFilterCamera();
+        //runIMUPrediction();
     }
     else
     {
