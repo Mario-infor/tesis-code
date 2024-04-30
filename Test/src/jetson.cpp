@@ -150,10 +150,6 @@ void initKalmanFilter(cv::KalmanFilter &KF, int stateSize)
     KF.statePre = cv::Mat::zeros(stateSize, 1, CV_32F);
     
     cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));     // Q.
-    //KF.processNoiseCov.at<float>(3,3) = 0;
-    //KF.processNoiseCov.at<float>(4,4) = 0;
-    //KF.processNoiseCov.at<float>(5,5) = 0;
-    //KF.processNoiseCov.at<float>(6,6) = 0;
     cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2)); // R.
     cv::setIdentity(KF.errorCovPost, cv::Scalar::all(1));           // P'.
     cv::setIdentity(KF.transitionMatrix, cv::Scalar::all(1));       // A.
@@ -356,7 +352,186 @@ void imuPreintegration(
 
 void runCameraAndIMUKalmanFilter()
 {
+    std::vector<CameraInput> cameraData = readDataCamera();
+    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
 
+    int indexCamera = 0;
+    int indexImu = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
+    size_t ites = imuReadVector.size() + cameraData.size();
+
+    float deltaTCam = -1;
+    float oldDeltaTCam = 0;
+    float deltaTImu = -1;
+    float oldDeltaTImu = 0;
+
+    bool isCameraNext = true;
+    bool firstRun = true;
+
+    Eigen::Vector3d oldCamT;
+    oldCamT.setZero();
+
+    Eigen::Vector3d oldCamR;
+    oldCamR.setZero();
+
+    Eigen::Vector3d deltaPos;
+    deltaPos.setZero();
+
+    Eigen::Vector3d deltaVel;
+    deltaVel.setZero();
+
+    Eigen::Vector3d oldAngularVelocity;
+    oldAngularVelocity.setZero();
+
+    Eigen::Vector3d oldLinealAcc;
+    oldLinealAcc.setZero();
+
+    Eigen::Quaterniond oldQuat;
+    oldQuat.setIdentity();
+
+    cv::KalmanFilter cameraKF(12, 12, 0);
+    cv::KalmanFilter imuKF(23, 23, 0);
+
+    Eigen::Matrix<double, 12, 1> measurementCam;
+    measurementCam.setZero();
+
+    Eigen::Matrix<double, 23, 1> measurementImu;
+    measurementImu.setZero();
+
+    initKalmanFilter(cameraKF, 12);
+    initKalmanFilter(imuKF, 23);
+
+    CameraInput tempCameraData = cameraData.at(indexCamera);
+    ImuInputJetson tempImuData = imuReadVector.at(indexImu);
+
+    FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
+         dictionary, cameraMatrix, distCoeffs);
+
+    Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
+    Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+    Eigen::Quaterniond imuQuat{
+        tempImuData.rotQuat[0],
+        tempImuData.rotQuat[1],
+        tempImuData.rotQuat[2],
+        tempImuData.rotQuat[3]
+    };
+
+    for (size_t i = 0; i < ites; i++)
+    {
+        if (cameraData.at(indexCamera + 1).time < imuReadVector.at(indexImu + 1).time)
+        {
+            isCameraNext = true;
+            indexCamera++;
+        }
+        else
+        {
+            isCameraNext = false;
+            indexImu++;
+        }
+
+        if (!firstRun)
+        {
+        
+        }
+        else
+        {
+            measurementCam(0) = frameMarkersData.tvecs[0].val[0]; // traslation (x)
+            measurementCam(1) = frameMarkersData.tvecs[0].val[1]; // traslation (y)
+            measurementCam(2) = frameMarkersData.tvecs[0].val[2]; // traslation (z)
+            measurementCam(3) = frameMarkersData.rvecs[0].val[0]; // rotation (x)
+            measurementCam(4) = frameMarkersData.rvecs[0].val[1]; // rotation (y)
+            measurementCam(5) = frameMarkersData.rvecs[0].val[2]; // rotation (z)
+
+            measurementCam(6) = 0; // traslation speed (x)
+            measurementCam(7) = 0; // traslation speed (y)
+            measurementCam(8) = 0; // traslation speed (z)
+            measurementCam(9) = 0; // rotation speed (x)
+            measurementCam(10) = 0; // rotation speed (y)
+            measurementCam(11) = 0; // rotation speed (z)    
+
+            cameraKF.statePost.at<float>(0) = measurementCam(0);
+            cameraKF.statePost.at<float>(1) = measurementCam(1);
+            cameraKF.statePost.at<float>(2) = measurementCam(2);
+            cameraKF.statePost.at<float>(3) = measurementCam(3);
+            cameraKF.statePost.at<float>(4) = measurementCam(4);
+            cameraKF.statePost.at<float>(5) = measurementCam(5);
+            cameraKF.statePost.at<float>(6) = measurementCam(6);
+            cameraKF.statePost.at<float>(7) = measurementCam(7);
+            cameraKF.statePost.at<float>(8) = measurementCam(8);
+            cameraKF.statePost.at<float>(9) = measurementCam(9);
+            cameraKF.statePost.at<float>(10) = measurementCam(10);
+            cameraKF.statePost.at<float>(11) = measurementCam(11);
+            
+            oldCamT(0) = measurementCam(0);
+            oldCamT(1) = measurementCam(1);
+            oldCamT(2) = measurementCam(2);
+
+            oldCamR(0) = measurementCam(3);
+            oldCamR(1) = measurementCam(4);
+            oldCamR(2) = measurementCam(5);
+            
+
+            deltaTImu = tempImuData.time - imuReadVector.at(i-1).time;
+            deltaTImu /= 1000;
+
+            Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
+            imuPreintegration(deltaTImu, acc, gyro, deltaPos, deltaVel, imuRot);
+
+            measurementImu(0,0) = gyro[0];
+            measurementImu(1,0) = gyro[1];
+            measurementImu(2,0) = gyro[2];
+            measurementImu(3,0) = imuQuat.w();
+            measurementImu(4,0) = imuQuat.x();
+            measurementImu(5,0) = imuQuat.y();
+            measurementImu(6,0) = imuQuat.z();
+            measurementImu(7,0) = deltaVel[0];
+            measurementImu(8,0) = deltaVel[1];
+            measurementImu(9,0) = deltaVel[2];
+            measurementImu(10,0) = deltaPos[0];
+            measurementImu(11,0) = deltaPos[1];
+            measurementImu(12,0) = deltaPos[2];
+            measurementImu(13,0) = 0; // angular acc x
+            measurementImu(14,0) = 0; // angular acc y
+            measurementImu(15,0) = 0; // angular acc z
+            measurementImu(16,0) = acc[0]; // lineal acc x
+            measurementImu(17,0) = acc[1]; // lineal acc y
+            measurementImu(18,0) = acc[2]; // lineal acc z
+            measurementImu(19,0) = 0; // quat vel w
+            measurementImu(20,0) = 0; // quat vel x
+            measurementImu(21,0) = 0; // quat vel y
+            measurementImu(22,0) = 0; // quat vel z
+
+            imuKF.statePost.at<float>(0) = measurementImu(0,0);
+            imuKF.statePost.at<float>(1) = measurementImu(1,0);
+            imuKF.statePost.at<float>(2) = measurementImu(2,0);
+            imuKF.statePost.at<float>(3) = measurementImu(3,0);
+            imuKF.statePost.at<float>(4) = measurementImu(4,0);
+            imuKF.statePost.at<float>(5) = measurementImu(5,0);
+            imuKF.statePost.at<float>(6) = measurementImu(6,0);
+            imuKF.statePost.at<float>(7) = measurementImu(7,0);
+            imuKF.statePost.at<float>(8) = measurementImu(8,0);
+            imuKF.statePost.at<float>(9) = measurementImu(9,0);
+            imuKF.statePost.at<float>(10) = measurementImu(10,0);
+            imuKF.statePost.at<float>(11) = measurementImu(11,0);
+            imuKF.statePost.at<float>(12) = measurementImu(12,0);
+            imuKF.statePost.at<float>(13) = measurementImu(13,0);
+            imuKF.statePost.at<float>(14) = measurementImu(14,0);
+            imuKF.statePost.at<float>(15) = measurementImu(15,0);
+            imuKF.statePost.at<float>(16) = measurementImu(16,0);
+            imuKF.statePost.at<float>(17) = measurementImu(17,0);
+            imuKF.statePost.at<float>(18) = measurementImu(18,0);
+            imuKF.statePost.at<float>(19) = measurementImu(19,0);
+            imuKF.statePost.at<float>(20) = measurementImu(20,0);
+            imuKF.statePost.at<float>(21) = measurementImu(21,0);
+            imuKF.statePost.at<float>(22) = measurementImu(22,0);
+
+            oldAngularVelocity = gyro;
+            oldLinealAcc = acc;
+            oldQuat = imuQuat;
+            oldDeltaTImu = tempImuData.time;
+
+            firstRun = false;
+        }
+    }
 }
 
 void runIMUPrediction()
@@ -413,9 +588,6 @@ void runIMUPrediction()
 
     std::vector<CameraInput> cameraData = readDataCamera();
     std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
-
-    int cameraDataSize = cameraData.size();
-    int imuReadVectorSize = imuReadVector.size();
 
     int imuIndex = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
 
@@ -783,6 +955,7 @@ void runKalmanFilterCamera()
             predict(KF);
 
             deltaT = tempCameraData.time - cameraData.at(i-1).time;
+            deltaT /= 1000;
 
             updateTransitionMatrix(KF, deltaT);
             updateMeasurementMatrix(KF);
@@ -802,6 +975,8 @@ void runKalmanFilterCamera()
 
             correct(KF, measurement);
             
+            cv::Mat frameCopy = tempCameraData.frame.clone();
+
             drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
                             tempCameraData.frame, cameraMatrix, distCoeffs, "Original");
             
@@ -815,7 +990,7 @@ void runKalmanFilterCamera()
             std::vector<cv::Vec3d> tempRvecs;
             tempRvecs.push_back(tempRvec);
 
-            drawAxisOnFrame(tempRvecs, tempTvecs, tempCameraData.frame, cameraMatrix, distCoeffs, "EKF");
+            drawAxisOnFrame(tempRvecs, tempTvecs, frameCopy, cameraMatrix, distCoeffs, "EKF");
 
             Eigen::Vector3d graphTvecOriginal{frameMarkersData.rvecs[0][0], frameMarkersData.rvecs[0][1], frameMarkersData.rvecs[0][2]};
             Eigen::Vector3d graphTvecKF{tempRvec[0], tempRvec[1], tempRvec[2]};
