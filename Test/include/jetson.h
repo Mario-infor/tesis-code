@@ -51,9 +51,6 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 // Update the transition matrix (A) for IMU KF with new deltaT and gyro values.
 void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT);
 
-// Initialisation of statePost the first time when no prediction have been made.
-void initStatePostFirstTime(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
-
 // Method to predict the next state of the imu data.
 void imuPreintegration(const float deltaT, const Eigen::Vector3d acc,
  const Eigen::Vector3d gyro, Eigen::Vector3d &deltaPos, Eigen::Vector3d &deltaVel,
@@ -64,5 +61,8 @@ void runKalmanFilterCamera();
 
 // Method to predict the state of the IMU data.
 void runIMUPrediction();
+
+// Method to predict and correct the state of the IMU and Camera together.
+void runCameraAndIMUKalmanFilter();
 
 #endif // JETSON_H
