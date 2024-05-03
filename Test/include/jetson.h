@@ -51,6 +51,10 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 // Update the transition matrix (A) for IMU KF with new deltaT and gyro values.
 void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT);
 
+void updateTransitionMatrixFusionIMU(cv::KalmanFilter &KF, float deltaT);
+
+void updateTransitionMatrixFusionCamera (cv::KalmanFilter &KF, float deltaT);
+
 // Method to predict the next state of the imu data.
 void imuPreintegration(const float deltaT, const Eigen::Vector3d acc,
  const Eigen::Vector3d gyro, Eigen::Vector3d &deltaPos, Eigen::Vector3d &deltaVel,

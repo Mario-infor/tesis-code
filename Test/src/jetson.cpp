@@ -160,9 +160,6 @@ void predict(cv::KalmanFilter &KF)
 {
     KF.statePre = KF.transitionMatrix * KF.statePost;
     KF.errorCovPre = KF.transitionMatrix * KF.errorCovPost * KF.transitionMatrix.t() + KF.processNoiseCov;
-
-    std::cout << "KF.processNoiseCov:\n" << KF.processNoiseCov << endl << endl;
-
 }
 
 void doMeasurement(cv::Mat_<float> &measurement, cv::Mat_<float> measurementOld,
@@ -223,6 +220,108 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
         0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+}
+
+void updateMeasurementMatrixFusionIMU(
+    cv::KalmanFilter &KF,
+    Eigen::Matrix<double, 23, 1> measurement,
+    Eigen::Matrix<double, 3, 3> imuRotFromNewOrigen,
+    Eigen::Vector3d deltaPos,
+    Eigen::Matrix<double, 4, 4> Gti,
+    Eigen::Matrix<double, 4, 4> Gci)
+{
+    Eigen::Matrix<double, 4, 4> Gi;
+    Gi.block<3, 3>(0, 0) = imuRotFromNewOrigen;
+    Gi.block<3, 1>(0, 3) = deltaPos;
+
+    Eigen::Matrix<double, 4, 4> Gmi;
+    Gmi = Gti * Gi;
+
+    Eigen::Matrix<double, 4, 4> Gmc = Gci.inverse() * Gmi;
+
+    
+}
+
+void updateTransitionMatrixFusionIMU (cv::KalmanFilter &KF, float deltaT)
+{
+    KF.transitionMatrix =
+        (cv::Mat_<float>(35, 35) << 
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+}
+
+void updateTransitionMatrixFusionCamera (cv::KalmanFilter &KF, float deltaT)
+{
+    KF.transitionMatrix =
+        (cv::Mat_<float>(35, 35) << 
+        1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0,deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 }
 
 void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT)
@@ -378,6 +477,8 @@ void runCameraAndIMUKalmanFilter()
     cv::KalmanFilter cameraKF(12, 12, 0);
     cv::KalmanFilter imuKF(23, 23, 0);
 
+    cv::KalmanFilter KF(35, 35, 0);
+
     Eigen::Matrix<double, 12, 1> measurementCam;
     measurementCam.setZero();
 
@@ -387,8 +488,25 @@ void runCameraAndIMUKalmanFilter()
     initKalmanFilter(cameraKF, 12);
     initKalmanFilter(imuKF, 23);
 
+    initKalmanFilter(KF, 35);
+
+    Eigen::Matrix<double, 4, 4> Gci;
+    Gci << 
+    -0.99787874, 0.05596833, -0.03324997, 0.09329806,
+    0.03309321, -0.00372569, -0.99944533, 0.01431868,
+    -0.05606116, -0.99842559, 0.00186561, -0.12008699,
+    0.0, 0.0, 0.0, 1.0;
+
+    Eigen::Matrix<double, 4, 4> Gmc;
+    Eigen::Matrix<double, 4, 4> Gcm;
+    Eigen::Matrix<double, 4, 4> Gi;
+    Eigen::Matrix<double, 4, 4> Gmi;
+    Eigen::Matrix<double, 4, 4> Gti;
+
     CameraInput tempCameraData = cameraData.at(indexCamera);
     ImuInputJetson tempImuData = imuReadVector.at(indexImu);
+
+    Eigen::Matrix<double, 3, 3> firstImuRot;
 
     FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
          dictionary, cameraMatrix, distCoeffs);
@@ -428,7 +546,7 @@ void runCameraAndIMUKalmanFilter()
                 deltaTCam = tempCameraData.time - oldDeltaTCam;
                 deltaTCam /= 1000;
 
-                updateTransitionMatrix(cameraKF, deltaTCam);
+                updateTransitionMatrixFusionCamera(KF, deltaTCam);
                 
                 measurementCam(0) = frameMarkersData.tvecs[0].val[0]; // traslation (x)
                 measurementCam(1) = frameMarkersData.tvecs[0].val[1]; // traslation (y)
@@ -462,7 +580,7 @@ void runCameraAndIMUKalmanFilter()
                     tempImuData.rotQuat[3]
                 };
 
-                updateTransitionMatrixIMU(imuKF, measurementImu, deltaTImu);
+                updateTransitionMatrixFusionIMU(KF, deltaTImu);
 
                 predict(imuKF);
 
@@ -485,15 +603,19 @@ void runCameraAndIMUKalmanFilter()
                 /////////////////////////// Measurenment ////////////////////////////////////
 
                 Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
-                imuPreintegration(deltaTImu, acc, gyro, deltaPos, deltaVel, imuRot);
+
+                Eigen::Matrix<double, 3, 3> imuRotFromNewOrigen = imuRot * firstImuRot.inverse();
+                Eigen::Quaterniond imuQuatNewOrigen(imuRotFromNewOrigen);
+
+                imuPreintegration(deltaTImu, acc, gyro, deltaPos, deltaVel, imuRotFromNewOrigen);
 
                 measurementImu(0,0) = gyro[0];
                 measurementImu(1,0) = gyro[1];
                 measurementImu(2,0) = gyro[2];
-                measurementImu(3,0) = imuQuat.w();
-                measurementImu(4,0) = imuQuat.x();
-                measurementImu(5,0) = imuQuat.y();
-                measurementImu(6,0) = imuQuat.z();
+                measurementImu(3,0) = imuQuatNewOrigen.w();
+                measurementImu(4,0) = imuQuatNewOrigen.x();
+                measurementImu(5,0) = imuQuatNewOrigen.y();
+                measurementImu(6,0) = imuQuatNewOrigen.z();
                 measurementImu(7,0) = deltaVel[0];
                 measurementImu(8,0) = deltaVel[1];
                 measurementImu(9,0) = deltaVel[2];
@@ -506,16 +628,16 @@ void runCameraAndIMUKalmanFilter()
                 measurementImu(16,0) = acc[0];
                 measurementImu(17,0) = acc[1];
                 measurementImu(18,0) = acc[2];
-                measurementImu(19,0) = (imuQuat.w() - oldQuat.w()) / deltaTImu;
-                measurementImu(20,0) = (imuQuat.x() - oldQuat.x()) / deltaTImu;
-                measurementImu(21,0) = (imuQuat.y() - oldQuat.y()) / deltaTImu;
-                measurementImu(22,0) = (imuQuat.z() - oldQuat.z()) / deltaTImu;
+                measurementImu(19,0) = (imuQuatNewOrigen.w() - oldQuat.w()) / deltaTImu;
+                measurementImu(20,0) = (imuQuatNewOrigen.x() - oldQuat.x()) / deltaTImu;
+                measurementImu(21,0) = (imuQuatNewOrigen.y() - oldQuat.y()) / deltaTImu;
+                measurementImu(22,0) = (imuQuatNewOrigen.z() - oldQuat.z()) / deltaTImu;
 
                 oldAngularVelocity = gyro;
                 oldLinealAcc = acc;
                 oldDeltaTImu = tempImuData.time;
                 oldDeltaTCam = tempCameraData.time;
-                oldQuat = imuQuat;
+                oldQuat = imuQuatNewOrigen;
 
                 /////////////////////////// Update ////////////////////////////////////
 
@@ -551,19 +673,33 @@ void runCameraAndIMUKalmanFilter()
             measurementCam(10) = 0; // rotation speed (y)
             measurementCam(11) = 0; // rotation speed (z)    
 
-            cameraKF.statePost.at<float>(0) = measurementCam(0);
-            cameraKF.statePost.at<float>(1) = measurementCam(1);
-            cameraKF.statePost.at<float>(2) = measurementCam(2);
-            cameraKF.statePost.at<float>(3) = measurementCam(3);
-            cameraKF.statePost.at<float>(4) = measurementCam(4);
-            cameraKF.statePost.at<float>(5) = measurementCam(5);
-            cameraKF.statePost.at<float>(6) = measurementCam(6);
-            cameraKF.statePost.at<float>(7) = measurementCam(7);
-            cameraKF.statePost.at<float>(8) = measurementCam(8);
-            cameraKF.statePost.at<float>(9) = measurementCam(9);
-            cameraKF.statePost.at<float>(10) = measurementCam(10);
-            cameraKF.statePost.at<float>(11) = measurementCam(11);
+            KF.statePost.at<float>(0) = measurementCam(0);
+            KF.statePost.at<float>(1) = measurementCam(1);
+            KF.statePost.at<float>(2) = measurementCam(2);
+            KF.statePost.at<float>(3) = measurementCam(3);
+            KF.statePost.at<float>(4) = measurementCam(4);
+            KF.statePost.at<float>(5) = measurementCam(5);
+            KF.statePost.at<float>(6) = measurementCam(6);
+            KF.statePost.at<float>(7) = measurementCam(7);
+            KF.statePost.at<float>(8) = measurementCam(8);
+            KF.statePost.at<float>(9) = measurementCam(9);
+            KF.statePost.at<float>(10) = measurementCam(10);
+            KF.statePost.at<float>(11) = measurementCam(11);
             
+            cv::Mat camRotMat;
+            cv::Rodrigues(frameMarkersData.rvecs[0], camRotMat);
+            Eigen::Matrix<double, 3, 3> camRot;
+            camRot <<
+            camRotMat.at<float>(0, 0), camRotMat.at<float>(0, 1), camRotMat.at<float>(0, 2),
+            camRotMat.at<float>(1, 0), camRotMat.at<float>(1, 1), camRotMat.at<float>(1, 2),
+            camRotMat.at<float>(2, 0), camRotMat.at<float>(2, 1), camRotMat.at<float>(2, 2);
+
+            Eigen::Vector3d camT{frameMarkersData.tvecs[0].val[0], frameMarkersData.tvecs[0].val[1], frameMarkersData.tvecs[0].val[2]};
+
+            Gmc.block<3,3>(0,0) = camRot;
+            Gmc.block<3,1>(0,3) = camT;
+            Gcm = Gmc.inverse();
+
             oldCamT(0) = measurementCam(0);
             oldCamT(1) = measurementCam(1);
             oldCamT(2) = measurementCam(2);
@@ -577,6 +713,7 @@ void runCameraAndIMUKalmanFilter()
             deltaTImu /= 1000;
 
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
+            firstImuRot = imuRot;
             imuPreintegration(deltaTImu, acc, gyro, deltaPos, deltaVel, imuRot);
 
             measurementImu(0,0) = gyro[0];
@@ -603,34 +740,39 @@ void runCameraAndIMUKalmanFilter()
             measurementImu(21,0) = 0; // quat vel y
             measurementImu(22,0) = 0; // quat vel z
 
-            imuKF.statePost.at<float>(0) = measurementImu(0,0);
-            imuKF.statePost.at<float>(1) = measurementImu(1,0);
-            imuKF.statePost.at<float>(2) = measurementImu(2,0);
-            imuKF.statePost.at<float>(3) = measurementImu(3,0);
-            imuKF.statePost.at<float>(4) = measurementImu(4,0);
-            imuKF.statePost.at<float>(5) = measurementImu(5,0);
-            imuKF.statePost.at<float>(6) = measurementImu(6,0);
-            imuKF.statePost.at<float>(7) = measurementImu(7,0);
-            imuKF.statePost.at<float>(8) = measurementImu(8,0);
-            imuKF.statePost.at<float>(9) = measurementImu(9,0);
-            imuKF.statePost.at<float>(10) = measurementImu(10,0);
-            imuKF.statePost.at<float>(11) = measurementImu(11,0);
-            imuKF.statePost.at<float>(12) = measurementImu(12,0);
-            imuKF.statePost.at<float>(13) = measurementImu(13,0);
-            imuKF.statePost.at<float>(14) = measurementImu(14,0);
-            imuKF.statePost.at<float>(15) = measurementImu(15,0);
-            imuKF.statePost.at<float>(16) = measurementImu(16,0);
-            imuKF.statePost.at<float>(17) = measurementImu(17,0);
-            imuKF.statePost.at<float>(18) = measurementImu(18,0);
-            imuKF.statePost.at<float>(19) = measurementImu(19,0);
-            imuKF.statePost.at<float>(20) = measurementImu(20,0);
-            imuKF.statePost.at<float>(21) = measurementImu(21,0);
-            imuKF.statePost.at<float>(22) = measurementImu(22,0);
+            KF.statePost.at<float>(12) = measurementImu(0,0);
+            KF.statePost.at<float>(13) = measurementImu(1,0);
+            KF.statePost.at<float>(14) = measurementImu(2,0);
+            KF.statePost.at<float>(15) = measurementImu(3,0);
+            KF.statePost.at<float>(16) = measurementImu(4,0);
+            KF.statePost.at<float>(17) = measurementImu(5,0);
+            KF.statePost.at<float>(18) = measurementImu(6,0);
+            KF.statePost.at<float>(19) = measurementImu(7,0);
+            KF.statePost.at<float>(20) = measurementImu(8,0);
+            KF.statePost.at<float>(21) = measurementImu(9,0);
+            KF.statePost.at<float>(22) = measurementImu(10,0);
+            KF.statePost.at<float>(23) = measurementImu(11,0);
+            KF.statePost.at<float>(24) = measurementImu(12,0);
+            KF.statePost.at<float>(25) = measurementImu(13,0);
+            KF.statePost.at<float>(26) = measurementImu(14,0);
+            KF.statePost.at<float>(27) = measurementImu(15,0);
+            KF.statePost.at<float>(28) = measurementImu(16,0);
+            KF.statePost.at<float>(29) = measurementImu(17,0);
+            KF.statePost.at<float>(30) = measurementImu(18,0);
+            KF.statePost.at<float>(31) = measurementImu(19,0);
+            KF.statePost.at<float>(32) = measurementImu(20,0);
+            KF.statePost.at<float>(33) = measurementImu(21,0);
+            KF.statePost.at<float>(34) = measurementImu(22,0);
+
+            Gi.block<3,3>(0,0) = imuRot;
+            Gi.block<3,1>(0,3) = deltaPos;
 
             oldAngularVelocity = gyro;
             oldLinealAcc = acc;
             oldQuat = imuQuat;
             oldDeltaTImu = tempImuData.time;
+
+            Gti = Gci * Gcm * Gi.inverse();
 
             firstRun = false;
         }
