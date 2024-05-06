@@ -91,4 +91,6 @@ void normalizeDataSet(std::vector<Eigen::Vector3d> points, std::vector<float> &r
 
 cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat);
 
+Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec);
+
 #endif // UTILS_H

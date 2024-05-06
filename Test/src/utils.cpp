@@ -406,3 +406,16 @@ cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat)
     return opencvMat;
 }
 
+Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec)
+{
+    cv::Mat camRotMat;
+    cv::Rodrigues(camRvec, camRotMat);
+    Eigen::Matrix<double, 3, 3> camRot;
+    camRot <<
+    camRotMat.at<float>(0, 0), camRotMat.at<float>(0, 1), camRotMat.at<float>(0, 2),
+    camRotMat.at<float>(1, 0), camRotMat.at<float>(1, 1), camRotMat.at<float>(1, 2),
+    camRotMat.at<float>(2, 0), camRotMat.at<float>(2, 1), camRotMat.at<float>(2, 2);
+
+    return camRot;
+}
+
