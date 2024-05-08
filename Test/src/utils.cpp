@@ -419,3 +419,24 @@ Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec)
     return camRot;
 }
 
+Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarkersData)
+{
+    cv::Mat camRotMat;
+    cv::Rodrigues(frameMarkersData.rvecs[0], camRotMat);
+    Eigen::Matrix<double, 3, 3> camRot;
+    camRot <<
+    camRotMat.at<float>(0, 0), camRotMat.at<float>(0, 1), camRotMat.at<float>(0, 2),
+    camRotMat.at<float>(1, 0), camRotMat.at<float>(1, 1), camRotMat.at<float>(1, 2),
+    camRotMat.at<float>(2, 0), camRotMat.at<float>(2, 1), camRotMat.at<float>(2, 2);
+
+    Eigen::Vector3d camT{frameMarkersData.tvecs[0].val[0], frameMarkersData.tvecs[0].val[1], frameMarkersData.tvecs[0].val[2]};
+    
+    Eigen::Matrix<double, 4, 4> g;
+    g.setIdentity();
+
+    g.block<3,3>(0,0) = camRot;
+    g.block<3,1>(0,3) = camT;
+    
+    return g;
+}
+

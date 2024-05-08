@@ -69,4 +69,9 @@ void runIMUPrediction();
 // Method to predict and correct the state of the IMU and Camera together.
 void runCameraAndIMUKalmanFilter();
 
+Eigen::Matrix<double, 12, 1> getMeasurenmentEstimateFromState(
+    cv::KalmanFilter &KF,
+    Eigen::Matrix<double, 4, 4> Gti,
+    Eigen::Matrix<double, 4, 4> Gci);
+
 #endif // JETSON_H
