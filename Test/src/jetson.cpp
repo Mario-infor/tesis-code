@@ -302,13 +302,15 @@ Eigen::Matrix<double, 12, 1> getMeasurenmentEstimateFromState(
     Eigen::Matrix<double, 4 ,4> imuGhi = Gci * camGhi * Gci.inverse(); 
 
     Eigen::Vector3d estimateMeasurenmentVel =  imuGhi.block<3, 1>(0, 3);
-    Eigen::Vector3d estimateMeasurenmentAngularVel = imuGhi.block<3, 3>(0, 0);
+    Eigen::Matrix3d estimateMeasurenmentAngularVel = imuGhi.block<3, 3>(0, 0);
     Eigen::Vector3d estimateMeasurenmentPos = Gi.block<3, 1>(0, 3);
     Eigen::Matrix<double, 3, 3> estimateMeasurenmentRot = Gi.block<3, 3>(0, 0);
     Eigen::Quaterniond estimateMeasurenmentQuat(estimateMeasurenmentRot);
     estimateMeasurenmentQuat.normalize();
     
-    camMeasurementFromIMU.block<3, 1>(0, 0) = estimateMeasurenmentAngularVel;
+    camMeasurementFromIMU(0) = estimateMeasurenmentAngularVel(2,1);
+    camMeasurementFromIMU(1) = estimateMeasurenmentAngularVel(0,2);
+    camMeasurementFromIMU(2) = estimateMeasurenmentAngularVel(1,0);
     camMeasurementFromIMU(3) = estimateMeasurenmentQuat.w();
     camMeasurementFromIMU(4) = estimateMeasurenmentQuat.x();
     camMeasurementFromIMU(5) = estimateMeasurenmentQuat.y();
@@ -321,7 +323,7 @@ Eigen::Matrix<double, 12, 1> getMeasurenmentEstimateFromState(
 
 void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT)
 {
-    float w1 = KF.statePost.at<float>(0);
+    /*float w1 = KF.statePost.at<float>(0);
     float w2 = KF.statePost.at<float>(1);
     float w3 = KF.statePost.at<float>(2);
 
@@ -332,7 +334,7 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1
     float sin = std::sin(normU_2) / normU_2;
     float cos = std::cos(normU_2);
 
-    float sin_2 = sin / 2;
+    float sin_2 = sin / 2;*/
 
     KF.transitionMatrix =
         (cv::Mat_<float>(23, 23) << 
@@ -588,7 +590,7 @@ void runCameraAndIMUKalmanFilter()
                 Eigen::Matrix3d camRot = Gmc.block<3,3>(0,0);
                 Eigen::Quaterniond camQuat(camRot);
                 
-                Eigen::Matrix3d oldCamRot = oldCamQuat.toRotationMatrix();
+                //Eigen::Matrix3d oldCamRot = oldCamQuat.toRotationMatrix();
                 //Eigen::Matrix3d what = ((camRot - oldCamRot)/deltaTCam) * camRot.transpose();
 
                 Eigen::Vector3d w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCam);
@@ -661,8 +663,8 @@ void runCameraAndIMUKalmanFilter()
                 /////////////////////////// Update ////////////////////////////////////
 
                 Eigen::Matrix<double, 13, 1> h;
-                calculateHAndJacobian(KF, Gti, Gci, Gni);
-
+                Eigen::Matrix<double, 13, 13> H;
+                calculateHAndJacobian(KF, Gti, Gci, Gni, h, H);
 
                 correctIMU_EKF(KF, measurementImu, h);
             }

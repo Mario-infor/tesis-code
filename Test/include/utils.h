@@ -104,8 +104,8 @@ void calculateHAndJacobian(
     Eigen::Matrix<double, 4, 4> Gti,
     Eigen::Matrix<double, 4, 4> Gci,
     Eigen::Matrix<double, 4, 4> Gni,
-    Eigen::Matrix<double, 13, 1> h,
-    Eigen::Matrix<double, 13, 13> jacobian);
-    );
+    Eigen::Matrix<double, 13, 1> &h,
+    Eigen::Matrix<double, 13, 13> &H
+);
 
 #endif // UTILS_H
