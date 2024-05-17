@@ -54,6 +54,8 @@ void drawAxisOnFrame(
 // Get the antisymetric matrix from a vector.
 Eigen::Matrix3d getWHat(const Eigen::Vector3d v);
 
+Eigen::Matrix4d getGhi(const Eigen::Vector3d w, const Eigen::Vector3d v);
+
 int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
  std::vector<ImuInputJetson> imuReadVector);
 
@@ -94,5 +96,16 @@ cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat);
 Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec);
 
 Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarkersData);
+
+Eigen::Vector3d getAngularVelocityFromTwoQuats(Eigen::Quaterniond q1, Eigen::Quaterniond q2, float deltaT);
+
+void calculateHAndJacobian(
+    cv::KalmanFilter KF,
+    Eigen::Matrix<double, 4, 4> Gti,
+    Eigen::Matrix<double, 4, 4> Gci,
+    Eigen::Matrix<double, 4, 4> Gni,
+    Eigen::Matrix<double, 13, 1> h,
+    Eigen::Matrix<double, 13, 13> jacobian);
+    );
 
 #endif // UTILS_H

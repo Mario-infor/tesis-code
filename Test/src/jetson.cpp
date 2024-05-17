@@ -204,6 +204,22 @@ void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurement)
     KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * KF.measurementMatrix) * KF.errorCovPre;
 }
 
+void correctIMU_EKF(
+    cv::KalmanFilter &KF,
+    Eigen::Matrix<double, 13, 1> measurement,
+    Eigen::Matrix<double, 13, 1> h)
+{
+    cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
+    KF.gain = KF.errorCovPre * KF.measurementMatrix.t() * S.inv();
+
+    int stateSize = KF.statePre.rows;
+
+    cv::Mat error = convertEigenMatToOpencvMat(measurement - h);
+
+    KF.statePost = KF.statePre + KF.gain * error;
+    KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * KF.measurementMatrix) * KF.errorCovPre;
+}
+
 void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
 {
     KF.transitionMatrix =
@@ -215,6 +231,32 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT)
         0, 0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0, 0,
         0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT, 0,
         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, deltaT,
+        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+        );
+}
+
+void updateTransitionMatrixFusion(cv::KalmanFilter &KF, float deltaT)
+{
+    float dT2 = deltaT / 2;
+
+    float w1 = KF.statePost.at<float>(10);
+    float w2 = KF.statePost.at<float>(11);
+    float w3 = KF.statePost.at<float>(12);
+    
+    KF.transitionMatrix =
+        (cv::Mat_<float>(13, 13) << 
+        1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
+        0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
+        0, 0, 0, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, dT2*w3, dT2*w2, -dT2*w1, 1, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
@@ -490,7 +532,9 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Matrix<double, 4, 4> Gcm;
     Eigen::Matrix<double, 4, 4> Gi;
     Eigen::Matrix<double, 4, 4> Gmi;
-    Eigen::Matrix<double, 4, 4> Gti;
+
+    Eigen::Matrix<double, 4, 4> Gti; // Constant that converts IMU measurenment to IMU pos in camera world.
+    Eigen::Matrix<double, 4, 4> Gni; // Constant used to convert camera Ghi to IMU Ghi.
 
     CameraInput tempCameraData = cameraData.at(indexCamera);
     ImuInputJetson tempImuData = imuReadVector.at(indexImu);
@@ -535,7 +579,7 @@ void runCameraAndIMUKalmanFilter()
                 deltaTCam = tempCameraData.time - oldDeltaTCam;
                 deltaTCam /= 1000;
 
-                updateTransitionMatrix(KF, deltaTCam);
+                updateTransitionMatrixFusion(KF, deltaTCam);
                 
                 Gcm = getGFromFrameMarkersData(frameMarkersData);
                 Gmc = Gcm.inverse();
@@ -544,9 +588,11 @@ void runCameraAndIMUKalmanFilter()
                 Eigen::Matrix3d camRot = Gmc.block<3,3>(0,0);
                 Eigen::Quaterniond camQuat(camRot);
                 
-                 Eigen::Matrix3d oldCamRot = oldCamQuat.toRotationMatrix();
-                Eigen::Matrix3d what = ((camRot - oldCamRot)/deltaTCam) * camRot.transpose();
+                Eigen::Matrix3d oldCamRot = oldCamQuat.toRotationMatrix();
+                //Eigen::Matrix3d what = ((camRot - oldCamRot)/deltaTCam) * camRot.transpose();
 
+                Eigen::Vector3d w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCam);
+                
                 measurementCam.block<3,1>(0,0) = camT; // Traslation
                 measurementCam(3) = camQuat.w();
                 measurementCam(4) = camQuat.x();
@@ -555,13 +601,9 @@ void runCameraAndIMUKalmanFilter()
                 measurementCam(7) = (measurementCam(0) - oldCamT(0)) / deltaTCam; // traslation speed (x)
                 measurementCam(8) = (measurementCam(1) - oldCamT(1)) / deltaTCam; // traslation speed (y)
                 measurementCam(9) = (measurementCam(2) - oldCamT(2)) / deltaTCam; // traslation speed (z)
-                measurementCam(10) = (measurementCam(3) - oldCamQuat.w()) / deltaTCam; // rotation speed (w)
-                measurementCam(11) = (measurementCam(4) - oldCamQuat.x()) / deltaTCam; // rotation speed (x)
-                measurementCam(12) = (measurementCam(5) - oldCamQuat.y()) / deltaTCam; // rotation speed (y)
-                measurementCam(13) = (measurementCam(6) - oldCamQuat.z()) / deltaTCam; // rotation speed (z)
-                measurementCam(14) = -what(1,2); // angular speed (x)
-                measurementCam(15) = what(0,2); // angular speed (y)
-                measurementCam(16) = -what(0,1); // angular speed (z)
+                measurementCam(10) = w.x(); // angular speed (x)
+                measurementCam(11) = w.y(); // angular speed (y)
+                measurementCam(12) = w.z(); // angular speed (z)
 
                 cv::Mat tempMeasurement = convertEigenMatToOpencvMat(measurementCam);
                 correct(KF, tempMeasurement);
@@ -584,12 +626,12 @@ void runCameraAndIMUKalmanFilter()
                     tempImuData.rotQuat[3]
                 };
 
-                updateTransitionMatrixFusionIMU(KF, deltaTImu);
-
                 predict(KF);
 
                 deltaTImu = tempImuData.time - oldDeltaTImu;
                 deltaTImu /= 1000;
+
+                updateTransitionMatrixFusion(KF, deltaTImu);
 
                 /////////////////////////// Measurenment ////////////////////////////////////
 
@@ -615,11 +657,14 @@ void runCameraAndIMUKalmanFilter()
                 measurementImu(12,0) = deltaPos[2];
 
                 oldDeltaTImu = tempImuData.time;
-                oldDeltaTCam = tempCameraData.time;
 
                 /////////////////////////// Update ////////////////////////////////////
 
-                //correctIMU(KF, measurementImu);
+                Eigen::Matrix<double, 13, 1> h;
+                calculateHAndJacobian(KF, Gti, Gci, Gni);
+
+
+                correctIMU_EKF(KF, measurementImu, h);
             }
         }
         else
@@ -639,13 +684,9 @@ void runCameraAndIMUKalmanFilter()
             measurementCam(7) = 0; // traslation speed (x)
             measurementCam(8) = 0; // traslation speed (y)
             measurementCam(9) = 0; // traslation speed (z)
-            measurementCam(10) = 0; // quaternion speed (w)
-            measurementCam(11) = 0; // quaternion speed (x)
-            measurementCam(12) = 0; // quaternion speed (y)
-            measurementCam(13) = 0; // quaternion speed (z)
-            measurementCam(14) = 0; // angular speed (x)
-            measurementCam(15) = 0; // angular speed (y)
-            measurementCam(16) = 0; // angular speed (z)
+            measurementCam(10) = 0; // angular speed (x)
+            measurementCam(11) = 0; // angular speed (y)
+            measurementCam(12) = 0; // angular speed (z)
 
             KF.statePost.at<float>(0) = measurementCam(0);
             KF.statePost.at<float>(1) = measurementCam(1);
@@ -660,14 +701,11 @@ void runCameraAndIMUKalmanFilter()
             KF.statePost.at<float>(10) = measurementCam(10);
             KF.statePost.at<float>(11) = measurementCam(11);
             KF.statePost.at<float>(12) = measurementCam(12);
-            KF.statePost.at<float>(13) = measurementCam(13);
-            KF.statePost.at<float>(14) = measurementCam(14);
-            KF.statePost.at<float>(15) = measurementCam(15);
-            KF.statePost.at<float>(16) = measurementCam(16);
             
-            oldCamT = camT; 
+            oldCamT = camT;
             oldCamQuat = camQuat;
             oldCamAngSpeed = measurementCam.block<3,1>(14,0);
+            oldDeltaTCam = tempCameraData.time;
             
             deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
             deltaTImu /= 1000;
@@ -696,6 +734,8 @@ void runCameraAndIMUKalmanFilter()
             oldDeltaTImu = tempImuData.time;
 
             Gti = Gci * Gmc * Gi.inverse();
+
+            Gni = Gti.inverse() * Gci;
 
             firstRun = false;
         }
