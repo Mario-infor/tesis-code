@@ -435,11 +435,12 @@ Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarke
 {
     cv::Mat camRotMat;
     cv::Rodrigues(frameMarkersData.rvecs[0], camRotMat);
+
     Eigen::Matrix<double, 3, 3> camRot;
     camRot <<
-    camRotMat.at<float>(0, 0), camRotMat.at<float>(0, 1), camRotMat.at<float>(0, 2),
-    camRotMat.at<float>(1, 0), camRotMat.at<float>(1, 1), camRotMat.at<float>(1, 2),
-    camRotMat.at<float>(2, 0), camRotMat.at<float>(2, 1), camRotMat.at<float>(2, 2);
+    camRotMat.at<double>(0, 0), camRotMat.at<double>(0, 1), camRotMat.at<double>(0, 2),
+    camRotMat.at<double>(1, 0), camRotMat.at<double>(1, 1), camRotMat.at<double>(1, 2),
+    camRotMat.at<double>(2, 0), camRotMat.at<double>(2, 1), camRotMat.at<double>(2, 2);
 
     Eigen::Vector3d camT{frameMarkersData.tvecs[0].val[0], frameMarkersData.tvecs[0].val[1], frameMarkersData.tvecs[0].val[2]};
     
@@ -493,9 +494,9 @@ void calculateHAndJacobian(
     float v2 = KF.statePost.at<float>(8);
     float v3 = KF.statePost.at<float>(9);
 
-    float w0 = KF.statePost.at<float>(14);
-    float w1 = KF.statePost.at<float>(15);
-    float w2 = KF.statePost.at<float>(16);
+    float w0 = KF.statePost.at<float>(10);
+    float w1 = KF.statePost.at<float>(11);
+    float w2 = KF.statePost.at<float>(12);
 
     float r00_gni = Gni(0,0);
     float r01_gni = Gni(0,1);
@@ -671,4 +672,13 @@ void calculateHAndJacobian(
     H(7,11) = r02_gni;
     H(8,11) = r12_gni;
     H(9,11) = r22_gni;
+}
+
+Eigen::Matrix4d invertG(Eigen::Matrix4d G)
+{
+    Eigen::Matrix4d invG;
+    invG.setIdentity();
+    invG.block<3,3>(0,0) = G.block<3,3>(0,0).transpose();
+    invG.block<3,1>(0,3) = -G.block<3,3>(0,0).transpose()*G.block<3,1>(0,3);
+    return invG;
 }

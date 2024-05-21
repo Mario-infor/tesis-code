@@ -108,4 +108,6 @@ void calculateHAndJacobian(
     Eigen::Matrix<double, 13, 13> &H
 );
 
+Eigen::Matrix4d invertG(Eigen::Matrix4d G);
+
 #endif // UTILS_H

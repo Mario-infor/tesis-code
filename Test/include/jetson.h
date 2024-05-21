@@ -45,7 +45,11 @@ void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
 
 void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurement);
 
-void correctIMU_EKF(cv::KalmanFilter &KF, Eigen::Matrix<double, 13, 1> measurement, Eigen::Matrix<double, 13, 1> h);
+void correctIMU_EKF(
+    cv::KalmanFilter &KF,
+    Eigen::Matrix<double, 13, 1> measurement,
+    Eigen::Matrix<double, 13, 1> h,
+    Eigen::Matrix<double, 13, 13> H);
 
 // Update the transition matrix (A) with new deltaT value.
 void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
