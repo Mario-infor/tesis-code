@@ -110,4 +110,6 @@ void calculateHAndJacobian(
 
 Eigen::Matrix4d invertG(Eigen::Matrix4d G);
 
+void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName);
+
 #endif // UTILS_H

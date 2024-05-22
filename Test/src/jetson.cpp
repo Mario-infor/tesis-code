@@ -160,6 +160,11 @@ void predict(cv::KalmanFilter &KF)
 {
     KF.statePre = KF.transitionMatrix * KF.statePost;
     KF.errorCovPre = KF.transitionMatrix * KF.errorCovPost * KF.transitionMatrix.t() + KF.processNoiseCov;
+
+    std::cout << "transitionMatrix: " << std::endl << KF.transitionMatrix << std::endl << std::endl;
+    std::cout << "errorCovPost: " << std::endl << KF.errorCovPost << std::endl << std::endl;
+    std::cout << "processNoiseCov: " << std::endl << KF.processNoiseCov << std::endl << std::endl;
+    std::cout << "Error Cov Pre: " << std::endl << KF.errorCovPre << std::endl << std::endl;
 }
 
 void doMeasurement(cv::Mat_<float> &measurement, cv::Mat_<float> measurementOld,
@@ -182,8 +187,17 @@ FrameMarkersData frameMarkersData, float deltaT)
 
 void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement)
 {
+    std::cout << "Measurement: " << std::endl << KF.measurementMatrix << std::endl << std::endl; 
+    std::cout << "KF.errorCovPre: " << std::endl << KF.errorCovPre << std::endl << std::endl;
+    std::cout << "KF.measurementNoiseCov: " << std::endl << KF.measurementNoiseCov << std::endl << std::endl;  
+
     cv::Mat_<float> S = KF.measurementMatrix * KF.errorCovPre * KF.measurementMatrix.t() + KF.measurementNoiseCov;
+    
+    std::cout << "S: " << std::endl << S << std::endl << std::endl; 
+
     KF.gain = KF.errorCovPre * KF.measurementMatrix.t() * S.inv();
+
+    std::cout << "Gain: " << std::endl << KF.gain << std::endl << std::endl;
 
     int stateSize = KF.statePre.rows;
 
@@ -212,25 +226,25 @@ void correctIMU_EKF(
 {
     cv::Mat cv_H = convertEigenMatToOpencvMat(H);
 
-    std::cout << "H: " << std::endl << cv_H << std::endl << std::endl;
+    //std::cout << "H: " << std::endl << cv_H << std::endl << std::endl;
 
     cv::Mat S = cv_H * KF.errorCovPre * cv_H.t() + KF.measurementNoiseCov;
-    std::cout << "S: " << std::endl << S << std::endl << std::endl;
+    //std::cout << "S: " << std::endl << S << std::endl << std::endl;
 
     cv::Mat SInvert = S.inv();
-    std::cout << "S Invert: " << std::endl << SInvert << std::endl << std::endl;
+    //std::cout << "S Invert: " << std::endl << SInvert << std::endl << std::endl;
 
     cv::Mat cv_H_traspose = cv_H.t();
 
     KF.gain = KF.errorCovPre * cv_H_traspose * SInvert;
 
-    std::cout << "Gain: " << std::endl << KF.gain << std::endl << std::endl;
+    //std::cout << "Gain: " << std::endl << KF.gain << std::endl << std::endl;
 
     int stateSize = KF.statePre.rows;
 
     cv::Mat error = convertEigenMatToOpencvMat(measurement - h);
 
-    std::cout << "Error: " << std::endl << error << std::endl << std::endl;
+    //std::cout << "Error: " << std::endl << error << std::endl << std::endl;
 
     KF.statePost = KF.statePre + KF.gain * error;
     KF.errorCovPost = (cv::Mat::eye(stateSize, stateSize, KF.statePost.type()) - KF.gain * cv_H) * KF.errorCovPre;
@@ -343,15 +357,6 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1
     float w2 = KF.statePost.at<float>(1);
     float w3 = KF.statePost.at<float>(2);
 
-    Eigen::Vector3d u{w1, w2, w3};
-    u = u * deltaT;
-    float normU = u.norm();
-    float normU_2 = normU / 2;
-    float sin = std::sin(normU_2) / normU_2;
-    float cos = std::cos(normU_2);
-
-    float sin_2 = sin / 2;*/
-
     KF.transitionMatrix =
         (cv::Mat_<float>(23, 23) << 
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -376,60 +381,8 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
-    
-    /*KF.transitionMatrix =
-        (cv::Mat_<float>(23, 23) << 
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, cos, sin_2*w3, -sin_2*w2, sin_2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, -sin_2*w3, cos, sin_2*w1, sin_2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, sin_2*w2, -sin_2*w1, cos, sin_2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, -sin_2*w1, -sin_2*w2, -sin_2*w3, cos, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);*/
-    
 
-    /*KF.transitionMatrix =
-        (cv::Mat_<float>(23, 23) << 
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 1, -sin_2*w1, -sin_2*w2, -sin_2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, sin_2*w1, 1, sin_2*w3, -sin_2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, sin_2*w2, -sin_2*w3, 1, sin_2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, sin_2*w3, sin_2*w2, -sin_2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);*/
 
     /*KF.transitionMatrix =
         (cv::Mat_<float>(23, 23) << 
@@ -456,33 +409,6 @@ void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);*/
-
-    /*KF.transitionMatrix =
-        (cv::Mat_<float>(23, 23) << 
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0, 0,
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 0,
-        -dT2*q1, -dT2*q2, -dT2*q3, 1, -dT2*w1, -dT2*w2, -dT2*w3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        dT2*q0, -dT2*q3, dT2*q2, dT2*w1, 1, dT2*w3, -dT2*w2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        dT2*q3, dT2*q0, -dT2*q1, dT2*w2, -dT2*w3, 1, dT2*w1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        -dT2*q2, dT2*q1, dT2*q0, dT2*w3, dT2*w2, -dT2*w1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, deltaT,
-        0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, deltaT, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
-*/
-        // x4 -> q0
-        // x5 -> q1
-        // x6 -> q2
-        // x7 -> q3
 }
 
 void imuPreintegration(
@@ -590,7 +516,13 @@ void runCameraAndIMUKalmanFilter()
     {
         if (!firstRun)
         {
-            if (cameraData.at(indexCamera + 1).time < imuReadVector.at(indexImu + 1).time)
+            if (cameraData.at(indexCamera + 1).time == imuReadVector.at(indexImu + 1).time)
+            {
+                isCameraNext = true;
+                indexCamera++;
+                indexImu++;
+            }
+            else if (cameraData.at(indexCamera + 1).time < imuReadVector.at(indexImu + 1).time)
             {
                 isCameraNext = true;
                 indexCamera++;
@@ -608,6 +540,8 @@ void runCameraAndIMUKalmanFilter()
                     dictionary, cameraMatrix, distCoeffs);
                 
                 predict(KF);
+
+                fixStateQuaternion(KF, "pre");
 
                 std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
 
@@ -651,12 +585,40 @@ void runCameraAndIMUKalmanFilter()
                 cv::Mat tempMeasurement = convertEigenMatToOpencvMat(measurementCam);
                 correct(KF, tempMeasurement);
 
-                std::cout << "measurementCam: " << std::endl << KF.statePost << std::endl << std::endl;
+                fixStateQuaternion(KF, "post");
 
-                oldDeltaTCam = deltaTCam;
+                std::cout << "statePost: " << std::endl << KF.statePost << std::endl << std::endl;
+
+                oldDeltaTCam = tempCameraData.time;
                 oldCamT = camT;
                 oldCamQuat = camQuat;
                 //oldCamAngSpeed = measurementCam.block<3,1>(14,0);
+
+                ImuInputJetson tempImuData = imuReadVector.at(indexImu-1);
+                Eigen::Quaterniond imuQuat{
+                    tempImuData.rotQuat[0],
+                    tempImuData.rotQuat[1],
+                    tempImuData.rotQuat[2],
+                    tempImuData.rotQuat[3]
+                };
+                imuQuat.normalize();
+                firstImuRot = imuQuat.toRotationMatrix();
+
+                tempImuData = imuReadVector.at(indexImu);
+                Eigen::Quaterniond imuQuatNext{
+                    tempImuData.rotQuat[0],
+                    tempImuData.rotQuat[1],
+                    tempImuData.rotQuat[2],
+                    tempImuData.rotQuat[3]
+                };
+                imuQuatNext.normalize();
+                Gi.block<3,3>(0,0) = imuQuatNext.toRotationMatrix();
+                Gi.block<3,1>(0,3) = deltaPos;
+                Gti = Gci * Gmc * invertG(Gi);
+                Gni = invertG(Gti) * Gci;
+
+                deltaPos.setZero();
+                deltaVel.setZero();
 
                 lastOneWasCamera = true;
             }
@@ -677,6 +639,7 @@ void runCameraAndIMUKalmanFilter()
                 std::cout <<  "transitionMatrix: " << std::endl << KF.transitionMatrix << std::endl << std::endl;
 
                 predict(KF);
+                fixStateQuaternion(KF, "pre");
 
                 std::cout << "statePre: " << std::endl << KF.statePre << std::endl << std::endl;
 
@@ -705,7 +668,7 @@ void runCameraAndIMUKalmanFilter()
                 std::cout << "Det" << std::endl << imuRotFromNewOrigen.determinant() << std::endl << std::endl;
 
                 Eigen::Quaterniond imuQuatNewOrigen(imuRotFromNewOrigen);
-                //imuQuatNewOrigen.normalize();
+                imuQuatNewOrigen.normalize();
 
                 std::cout << "imuQuatNewOrigen Norm" << std::endl << imuQuatNewOrigen.norm() << std::endl << std::endl;
 
@@ -736,12 +699,15 @@ void runCameraAndIMUKalmanFilter()
 
                 Eigen::Matrix<double, 13, 1> h;
                 Eigen::Matrix<double, 13, 13> H;
+                h.setZero();
+                H.setZero();
                 calculateHAndJacobian(KF, Gti, Gci, Gni, h, H);
 
                 std::cout << "h: " << std::endl << h << std::endl << std::endl;
                 std::cout << "H: " << std::endl << H << std::endl << std::endl;
 
                 correctIMU_EKF(KF, measurementImu, h, H);
+                fixStateQuaternion(KF, "post");
 
                 std::cout << "State Post: " << std::endl << KF.statePost << std::endl << std::endl;
 
