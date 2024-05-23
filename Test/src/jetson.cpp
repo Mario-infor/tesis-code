@@ -610,27 +610,29 @@ void runCameraAndIMUKalmanFilter()
 
                     // Reset IMU information.
 
-                    ImuInputJetson tempImuData = imuReadVector.at(indexImu-1);
-                    Eigen::Quaterniond imuQuat{
-                        tempImuData.rotQuat[0],
-                        tempImuData.rotQuat[1],
-                        tempImuData.rotQuat[2],
-                        tempImuData.rotQuat[3]
-                    };
-                    imuQuat.normalize();
-                    firstImuRot = imuQuat.toRotationMatrix();
+                    Eigen::Quaterniond stateQuat(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
+                        KF.statePost.at<float>(5), KF.statePost.at<float>(6));
+                    Eigen::Matrix<double, 3, 3> stateRot = stateQuat.toRotationMatrix();
+                    Eigen::Vector3d statePos(KF.statePost.at<float>(0), KF.statePost.at<float>(1), KF.statePost.at<float>(2));
 
-                    tempImuData = imuReadVector.at(indexImu);
-                    Eigen::Quaterniond imuQuatNext{
-                        tempImuData.rotQuat[0],
-                        tempImuData.rotQuat[1],
-                        tempImuData.rotQuat[2],
-                        tempImuData.rotQuat[3]
-                    };
-                    imuQuatNext.normalize();
+                    Eigen::Matrix4d resetGmi;
+                    resetGmi.setIdentity();
+                    resetGmi.block<3, 3>(0, 0) = stateRot;
+                    resetGmi.block<3, 1>(0, 3) = statePos;
 
-                    deltaPos.setZero();
-                    deltaVel.setZero();
+                    Gmi = resetGmi * Gci;
+
+                    Eigen::Matrix4d stateGhi;
+                    stateGhi << 
+                        0,                              -KF.statePost.at<float>(12),    KF.statePost.at<float>(11),     KF.statePost.at<float>(7),
+                        KF.statePost.at<float>(12),     0,                              -KF.statePost.at<float>(10),    KF.statePost.at<float>(8),
+                        -KF.statePost.at<float>(11),    KF.statePost.at<float>(10),     0,                              KF.statePost.at<float>(9),
+                        0,0,0,0;
+
+                    Eigen::Matrix4d imuGhi = Gci * stateGhi * invertG(Gci);
+
+                    deltaPos = Eigen::Vector3d(Gmi.block<3, 1>(0, 3));
+                    deltaVel = Eigen::Vector3d(imuGhi.block<3, 1>(0, 3));
 
                     lastOneWasCamera = true;
                 }
