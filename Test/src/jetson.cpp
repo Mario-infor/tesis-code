@@ -299,6 +299,7 @@ void updateTransitionMatrixFusion(cv::KalmanFilter &KF, float deltaT)
         );
 }
 
+/*
 Eigen::Matrix<double, 12, 1> getMeasurenmentEstimateFromState(
     cv::KalmanFilter &KF,
     Eigen::Matrix<double, 4, 4> Gti,
@@ -353,6 +354,7 @@ Eigen::Matrix<double, 12, 1> getMeasurenmentEstimateFromState(
 
     return camMeasurementFromIMU;
 }
+*/
 
 void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT)
 {
@@ -487,6 +489,7 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Matrix<double, 4, 4> Gcm;
     Eigen::Matrix<double, 4, 4> Gi;
     Eigen::Matrix<double, 4, 4> Gmi;
+    Eigen::Matrix<double, 4, 4> Gci_inv;
 
     Eigen::Matrix<double, 4, 4> Gti; // Constant that converts IMU measurenment to IMU pos in camera world.
     Eigen::Matrix<double, 4, 4> Gni; // Constant used to convert camera Ghi to IMU Ghi.
@@ -498,6 +501,8 @@ void runCameraAndIMUKalmanFilter()
     Gmi.setIdentity();
     Gti.setIdentity();
     Gni.setIdentity();
+
+    Gci_inv = invertG(Gci);
 
     CameraInput tempCameraData = cameraData.at(indexCamera);
     ImuInputJetson tempImuData = imuReadVector.at(indexImu);
@@ -575,7 +580,6 @@ void runCameraAndIMUKalmanFilter()
 
                     std::cout << "Transition Mat: " << std::endl <<  KF.transitionMatrix << std::endl << std::endl;
 
-
                     measurementCam.block<3,1>(0,0) = camT; // Traslation
                     measurementCam(3) = camQuat.w();
                     measurementCam(4) = camQuat.x();
@@ -624,22 +628,9 @@ void runCameraAndIMUKalmanFilter()
                         tempImuData.rotQuat[3]
                     };
                     imuQuatNext.normalize();
-                    Gi.block<3,3>(0,0) = imuQuatNext.toRotationMatrix();
-                    Gi.block<3,1>(0,3) = deltaPos;
-                    Gti = Gci * Gmc * invertG(Gi);
-                    Gni = invertG(Gti) * Gci;
 
                     deltaPos.setZero();
                     deltaVel.setZero();
-
-                    std::cout << "KF.errorCovPost: " << std::endl << KF.errorCovPost << std::endl << std::endl;
-                    std::cout << "KF.errorCovPre: " << std::endl << KF.errorCovPre << std::endl << std::endl;
-                    
-                    //cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));     // Q.
-                    //cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2)); // R.
-                    //cv::setIdentity(KF.errorCovPost, cv::Scalar::all(1));           // P'.
-                    //cv::setIdentity(KF.transitionMatrix, cv::Scalar::all(1));       // A.
-                    //cv::setIdentity(KF.measurementMatrix, cv::Scalar::all(1));      // H.
 
                     lastOneWasCamera = true;
                 }
@@ -727,7 +718,7 @@ void runCameraAndIMUKalmanFilter()
                 Eigen::Matrix<double, 13, 13> H;
                 h.setZero();
                 H.setZero();
-                calculateHAndJacobian(KF, Gti, Gci, Gni, h, H);
+                calculateHAndJacobian(KF, Gci, Gci_inv, h, H);
 
                 std::cout << "h: " << std::endl << h << std::endl << std::endl;
                 std::cout << "H: " << std::endl << H << std::endl << std::endl;
@@ -818,13 +809,7 @@ void runCameraAndIMUKalmanFilter()
             measurementImu(11,0) = deltaPos[1];
             measurementImu(12,0) = deltaPos[2];
 
-            Gi.block<3,3>(0,0) = imuRot;
-            Gi.block<3,1>(0,3) = deltaPos;
-
             oldDeltaTImu = tempImuData.time;
-
-            Gti = Gci * Gmc * invertG(Gi);
-            Gni = invertG(Gti) * Gci;
 
             firstRun = false;
         }

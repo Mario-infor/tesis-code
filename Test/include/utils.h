@@ -101,9 +101,8 @@ Eigen::Vector3d getAngularVelocityFromTwoQuats(Eigen::Quaterniond q1, Eigen::Qua
 
 void calculateHAndJacobian(
     cv::KalmanFilter KF,
-    Eigen::Matrix<double, 4, 4> Gti,
     Eigen::Matrix<double, 4, 4> Gci,
-    Eigen::Matrix<double, 4, 4> Gni,
+    Eigen::Matrix<double, 4, 4> Gci_inv,
     Eigen::Matrix<double, 13, 1> &h,
     Eigen::Matrix<double, 13, 13> &H
 );
