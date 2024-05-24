@@ -250,17 +250,18 @@ Eigen::Quaterniond rotVecToQuat(Eigen::Vector3d euler)
 void gnuPrintImuPreintegration(
     FILE *output,
     std::vector<Eigen::Vector3d> vectorOfPointsOne,
-    std::vector<Eigen::Vector3d> vectorOfPointsTwo)
+    std::vector<Eigen::Vector3d> vectorOfPointsTwo,
+    std::vector<Eigen::Vector3d> vectorOfMarkers)
 {
     fprintf(output, "set title \"IMU Preintegration\"\n");
     fprintf(output, "set xlabel \"x\"\n");
     fprintf(output, "set ylabel \"y\"\n");
     fprintf(output, "set zlabel \"z\"\n");
     fprintf(output, "set ticslevel 3.\n");
-    //fprintf(output, "set xrange [-0.5:0.5]\n");
-    //fprintf(output, "set yrange [-0.5:0.5]\n");
+    //fprintf(output, "set xrange [-1.0:1.0]\n");
+    //fprintf(output, "set yrange [-1.0:1.0]\n");
 
-    fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Original', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'Prediction'\n");
+    fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Z', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'X', '-' with points pointtype 7 ps 1 lc rgb 'black' title 'Marker'\n");
     
     Eigen::Vector3d tempPoint;
 
@@ -279,8 +280,16 @@ void gnuPrintImuPreintegration(
     }
     fflush(output);
     fprintf(output, "e\n");
+
+    for (size_t i = 0; i < vectorOfMarkers.size(); i++)
+    {
+        tempPoint = vectorOfMarkers.at(i);
+        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
     
-    usleep(100000);
+    //usleep(1000000/10);
 }
 
 void gnuPrintImuCompareValues(

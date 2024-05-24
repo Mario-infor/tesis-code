@@ -41,12 +41,13 @@ void predict(cv::KalmanFilter &KF);
 void doMeasurement(cv::Mat_<float> &measurement, cv::Mat_<float> measurementOld,
                     FrameMarkersData frameMarkersData, float deltaT);
 
-void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement);
+void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement, cv::Mat measurementNoiseCov);
 
 void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurement);
 
 void correctIMU_EKF(
     cv::KalmanFilter &KF,
+    cv::Mat measurementNoiseCov,
     Eigen::Matrix<double, 13, 1> measurement,
     Eigen::Matrix<double, 13, 1> h,
     Eigen::Matrix<double, 13, 13> H);

@@ -65,7 +65,8 @@ Eigen::Quaternion<double> rotVecToQuat(Eigen::Vector3d euler);
 void gnuPrintImuPreintegration(
     FILE *output,
     std::vector<Eigen::Vector3d> vectorOfPointsOne,
-    std::vector<Eigen::Vector3d> vectorOfPointsTwo);
+    std::vector<Eigen::Vector3d> vectorOfPointsTwo,
+    std::vector<Eigen::Vector3d> vectorOfMarkers);
 
 void gnuPrintImuCompareValues(
     FILE *output,
