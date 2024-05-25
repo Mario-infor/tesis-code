@@ -169,6 +169,7 @@ FrameMarkersData getRotationTraslationFromFrame(
 
         cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
 
+        frameMarkersData.markerIds = markerIds;
         frameMarkersData.rvecs = rvecs;
         frameMarkersData.tvecs = tvecs;
     }
@@ -440,10 +441,10 @@ Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec)
     return camRot;
 }
 
-Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarkersData)
+Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarkersData, int index)
 {
     cv::Mat camRotMat;
-    cv::Rodrigues(frameMarkersData.rvecs[0], camRotMat);
+    cv::Rodrigues(frameMarkersData.rvecs[index], camRotMat);
 
     Eigen::Matrix<double, 3, 3> camRot;
     camRot <<
@@ -451,7 +452,7 @@ Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarke
     camRotMat.at<double>(1, 0), camRotMat.at<double>(1, 1), camRotMat.at<double>(1, 2),
     camRotMat.at<double>(2, 0), camRotMat.at<double>(2, 1), camRotMat.at<double>(2, 2);
 
-    Eigen::Vector3d camT{frameMarkersData.tvecs[0].val[0], frameMarkersData.tvecs[0].val[1], frameMarkersData.tvecs[0].val[2]};
+    Eigen::Vector3d camT{frameMarkersData.tvecs[index].val[0], frameMarkersData.tvecs[index].val[1], frameMarkersData.tvecs[index].val[2]};
     
     Eigen::Matrix<double, 4, 4> g;
     g.setIdentity();

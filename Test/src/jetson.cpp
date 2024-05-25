@@ -453,6 +453,7 @@ void runCameraAndIMUKalmanFilter()
     int cameraIgnoredTimes = 0;
     int indexCamera = 0;
     int indexImu = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
+    int baseMarkerId = -1;
     size_t ites = imuReadVector.size() + cameraData.size();
 
     float deltaTCam = -1;
@@ -507,6 +508,10 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Matrix<double, 4, 4> Gi;
     Eigen::Matrix<double, 4, 4> Gmi;
     Eigen::Matrix<double, 4, 4> Gci_inv;
+    Eigen::Matrix<double, 4, 4> Gcm_second;
+    Eigen::Matrix<double, 4, 4> Gmc_second;
+    Eigen::Matrix<double, 4, 4> Gmm_secondToBase;
+
 
     Eigen::Matrix<double, 4, 4> Gti; // Constant that converts IMU measurenment to IMU pos in camera world.
     Eigen::Matrix<double, 4, 4> Gni; // Constant used to convert camera Ghi to IMU Ghi.
@@ -518,6 +523,9 @@ void runCameraAndIMUKalmanFilter()
     Gmi.setIdentity();
     Gti.setIdentity();
     Gni.setIdentity();
+    Gcm_second.setIdentity();
+    Gmc_second.setIdentity();
+    Gmm_secondToBase.setIdentity();
 
     Gci_inv = invertG(Gci);
 
@@ -566,66 +574,82 @@ void runCameraAndIMUKalmanFilter()
                 FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
                     dictionary, cameraMatrix, distCoeffs);
 
-                Gcm = getGFromFrameMarkersData(frameMarkersData);
-                
-                //Eigen::Vector3d markerPos = Gcm.block<3, 1>(0, 3);
-                //vectorOfMarkers.push_back(markerPos);
+                Eigen::Vector3d camT;
+                Eigen::Matrix3d camRot;
+                Eigen::Quaterniond camQuat;
 
-                Gmc = invertG(Gcm);
-
-                Eigen::Vector3d camT = Gmc.block<3,1>(0,3);
-                Eigen::Matrix3d camRot = Gmc.block<3,3>(0,0);
-                Eigen::Quaterniond camQuat(camRot);
-
-                Eigen::Vector3d w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCam);
-                std::cout << "w: " << std::endl << w << std::endl << std::endl;
-
-                float angSpeedDiffNorm = (oldCamAngSpeed - w).norm();
-
-                if(angSpeedDiffNorm > 10)
+                for (size_t j = 0; j < frameMarkersData.markerIds.size(); j++)
                 {
-                    cameraIgnoredTimes++;
-                    camT = oldCamT;
-                    camQuat = oldCamQuat;
-                    w = oldCamAngSpeed;
+                    
+                    if (frameMarkersData.markerIds.at(j) != baseMarkerId)
+                    {
+                        Eigen::Matrix4d tempGcm = getGFromFrameMarkersData(frameMarkersData, j);
+                        Gcm = tempGcm * Gmm_secondToBase;
+                    }
+                    else
+                    {
+                        Gcm = getGFromFrameMarkersData(frameMarkersData, j);
+                    }
+
+                    //Eigen::Vector3d markerPos = Gcm.block<3, 1>(0, 3);
+                    //vectorOfMarkers.push_back(markerPos);
+
+                    Gmc = invertG(Gcm);
+
+                    camT = Gmc.block<3,1>(0,3);
+                    camRot = Gmc.block<3,3>(0,0);
+                    camQuat = Eigen::Quaterniond(camRot);
+
+                    Eigen::Vector3d w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCam);
+                    std::cout << "w: " << std::endl << w << std::endl << std::endl;
+
+                    float angSpeedDiffNorm = (oldCamAngSpeed - w).norm();
+
+                    if(angSpeedDiffNorm > 10)
+                    {
+                        cameraIgnoredTimes++;
+                        camT = oldCamT;
+                        camQuat = oldCamQuat;
+                        w = oldCamAngSpeed;
+                    }
+
+                    predict(KF);
+                    fixStateQuaternion(KF, "pre");
+
+                    std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
+
+                    if(lastOneWasCamera)
+                        deltaTCam = tempCameraData.time - oldDeltaTCam;
+                    else
+                        deltaTCam = tempCameraData.time - oldDeltaTImu;
+
+                    deltaTCam /= 1000;
+
+                    updateTransitionMatrixFusion(KF, deltaTCam);
+                    std::cout << "Transition Mat: " << std::endl <<  KF.transitionMatrix << std::endl << std::endl;
+
+                    measurementCam.block<3,1>(0,0) = camT; // Traslation
+                    measurementCam(3) = camQuat.w();
+                    measurementCam(4) = camQuat.x();
+                    measurementCam(5) = camQuat.y();
+                    measurementCam(6) = camQuat.z();
+                    measurementCam(7) = (measurementCam(0) - oldCamT(0)) / deltaTCam; // traslation speed (x)
+                    measurementCam(8) = (measurementCam(1) - oldCamT(1)) / deltaTCam; // traslation speed (y)
+                    measurementCam(9) = (measurementCam(2) - oldCamT(2)) / deltaTCam; // traslation speed (z)
+                    measurementCam(10) = w.x(); // angular speed (x)
+                    measurementCam(11) = w.y(); // angular speed (y)
+                    measurementCam(12) = w.z(); // angular speed (z)
+                    std::cout << "measurementCam: " << std::endl << measurementCam << std::endl << std::endl;
+
+                    cv::Mat tempMeasurement = convertEigenMatToOpencvMat(measurementCam);
+                    correct(KF, tempMeasurement, measurementNoiseCovCam);
+                    fixStateQuaternion(KF, "post");
+
+                    std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
+                    std::cout << "statePost: " << std::endl << KF.statePost << std::endl << std::endl;
+                    std::cout << "measurementCam: " << std::endl << measurementCam << std::endl << std::endl;
+                    std::cout << "cameraIgnoredTimes: " << std::endl << cameraIgnoredTimes << std::endl << std::endl;
                 }
-
-                predict(KF);
-                fixStateQuaternion(KF, "pre");
-
-                std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
-
-                if(lastOneWasCamera)
-                    deltaTCam = tempCameraData.time - oldDeltaTCam;
-                else
-                    deltaTCam = tempCameraData.time - oldDeltaTImu;
-
-                deltaTCam /= 1000;
-
-                updateTransitionMatrixFusion(KF, deltaTCam);
-                std::cout << "Transition Mat: " << std::endl <<  KF.transitionMatrix << std::endl << std::endl;
-
-                measurementCam.block<3,1>(0,0) = camT; // Traslation
-                measurementCam(3) = camQuat.w();
-                measurementCam(4) = camQuat.x();
-                measurementCam(5) = camQuat.y();
-                measurementCam(6) = camQuat.z();
-                measurementCam(7) = (measurementCam(0) - oldCamT(0)) / deltaTCam; // traslation speed (x)
-                measurementCam(8) = (measurementCam(1) - oldCamT(1)) / deltaTCam; // traslation speed (y)
-                measurementCam(9) = (measurementCam(2) - oldCamT(2)) / deltaTCam; // traslation speed (z)
-                measurementCam(10) = w.x(); // angular speed (x)
-                measurementCam(11) = w.y(); // angular speed (y)
-                measurementCam(12) = w.z(); // angular speed (z)
-                std::cout << "measurementCam: " << std::endl << measurementCam << std::endl << std::endl;
-
-                cv::Mat tempMeasurement = convertEigenMatToOpencvMat(measurementCam);
-                correct(KF, tempMeasurement, measurementNoiseCovCam);
-                fixStateQuaternion(KF, "post");
-                
-                std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
-                std::cout << "statePost: " << std::endl << KF.statePost << std::endl << std::endl;
-                std::cout << "measurementCam: " << std::endl << measurementCam << std::endl << std::endl;
-                std::cout << "cameraIgnoredTimes: " << std::endl << cameraIgnoredTimes << std::endl << std::endl;
 
                 oldDeltaTCam = tempCameraData.time;
                 oldCamT = camT;
@@ -763,14 +787,20 @@ void runCameraAndIMUKalmanFilter()
         }
         else
         {
-            Gcm = getGFromFrameMarkersData(frameMarkersData);
+            baseMarkerId = frameMarkersData.markerIds.at(0);
+            Gcm = getGFromFrameMarkersData(frameMarkersData, 0);
             Gmc = invertG(Gcm);
+
+            Gcm_second = getGFromFrameMarkersData(frameMarkersData, 1);
+            Gmc_second = invertG(Gcm_second);
+
+            Gmm_secondToBase = Gmc_second * Gcm;
 
             Eigen::Vector3d camT = Gmc.block<3,1>(0,3);
             Eigen::Matrix3d camRot = Gmc.block<3,3>(0,0);
             Eigen::Quaterniond camQuat(camRot);
 
-            Eigen::Matrix4d firstGcm = getGFromFrameMarkersData(firstFrameMarkersData);
+            Eigen::Matrix4d firstGcm = getGFromFrameMarkersData(firstFrameMarkersData, 0);
             Eigen::Matrix4d firstGmc = invertG(firstGcm);
             Eigen::Vector3d firstCamT = firstGmc.block<3,1>(0,3);
             Eigen::Matrix3d firstCamRot = firstGmc.block<3,3>(0,0);
