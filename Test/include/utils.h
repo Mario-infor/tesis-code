@@ -112,4 +112,8 @@ Eigen::Matrix4d invertG(Eigen::Matrix4d G);
 
 void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName);
 
+int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId);
+
+std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkersData firstFrameMarkersData, Eigen::Matrix4d Gcm, int indexBaseMarker);
+
 #endif // UTILS_H

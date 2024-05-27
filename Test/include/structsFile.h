@@ -4,6 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <Eigen/Dense>
 
 // Struct to store information about each frame saved.
 struct CameraInput
@@ -50,6 +51,13 @@ struct CameraInterpolatedData
     int originalOrNot; // 0 = original, 1 = interpolated.
     CameraInput frame;
     FrameMarkersData frameMarkersData;
+};
+
+struct TransformBetweenMarkers
+{
+    int baseMarkerId;
+    int secundaryMarkerId;
+    Eigen::Matrix4d G;
 };
 
 #endif

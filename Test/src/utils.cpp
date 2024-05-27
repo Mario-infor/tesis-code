@@ -261,6 +261,8 @@ void gnuPrintImuPreintegration(
     fprintf(output, "set ticslevel 3.\n");
     //fprintf(output, "set xrange [-1.0:1.0]\n");
     //fprintf(output, "set yrange [-1.0:1.0]\n");
+    fprintf(output, "set zrange [0.0:0.05]\n");
+
 
     fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Z', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'X', '-' with points pointtype 7 ps 1 lc rgb 'black' title 'Marker'\n");
     
@@ -644,4 +646,39 @@ void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName)
         KF.statePost.at<float>(5) = q.y();
         KF.statePost.at<float>(6) = q.z();
     }
+}
+
+int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId)
+{
+    int baseMarkerIndex = -1;
+    for(size_t i = 0; i < markerIds.size(); i++)
+    {
+        if(markerIds[i] == baseMarkerId)
+        {
+            baseMarkerIndex = i;
+            break;
+        }
+    }
+    return baseMarkerIndex;
+}
+
+std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkersData firstFrameMarkersData, Eigen::Matrix4d Gcm, int indexBaseMarker)
+{
+    std::vector<TransformBetweenMarkers> transforms;
+
+    int baseMarkerId = firstFrameMarkersData.markerIds[indexBaseMarker];
+
+    for(size_t i = 0; i < firstFrameMarkersData.markerIds.size(); i++)
+    {
+        if(firstFrameMarkersData.markerIds[i] != baseMarkerId)
+        {
+            TransformBetweenMarkers transform;
+            transform.baseMarkerId = baseMarkerId;
+            transform.secundaryMarkerId = firstFrameMarkersData.markerIds[i];
+            Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i);            
+            transform.G = invertG(gCamToMarker) * Gcm;
+            transforms.push_back(transform);
+        }
+    }
+    return transforms;
 }

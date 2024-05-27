@@ -13,6 +13,8 @@
 #define THRESHOLD_IMU_ACC 0.001
 #define THRESHOLD_IMU_GYRO 0.01
 
+#define BASE_MARKER_ID 30
+
 //#define THRESHOLD_IMU_ACC_MAX 0.001
 //#define THRESHOLD_IMU_ACC_MIN -0.0001
 //#define THRESHOLD_IMU_GYRO_MAX 0.07
@@ -48,9 +50,9 @@ void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurement);
 void correctIMU_EKF(
     cv::KalmanFilter &KF,
     cv::Mat measurementNoiseCov,
-    Eigen::Matrix<double, 13, 1> measurement,
-    Eigen::Matrix<double, 13, 1> h,
-    Eigen::Matrix<double, 13, 13> H);
+    Eigen::MatrixXd measurement,
+    Eigen::MatrixXd h,
+    Eigen::MatrixXd H);
 
 // Update the transition matrix (A) with new deltaT value.
 void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
@@ -58,7 +60,7 @@ void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
 // Update the transition matrix (A) for IMU KF with new deltaT and gyro values.
 void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT);
 
-void updateTransitionMatrixFusionIMU(cv::KalmanFilter &KF, float deltaT);
+void updateTransitionMatrixFusionIMU(cv::KalmanFilter &KF, float deltaT, int stateSize);
 
 void updateTransitionMatrixFusionCamera (cv::KalmanFilter &KF, float deltaT);
 
