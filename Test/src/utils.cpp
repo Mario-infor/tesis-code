@@ -261,7 +261,7 @@ void gnuPrintImuPreintegration(
     fprintf(output, "set ticslevel 3.\n");
     //fprintf(output, "set xrange [-1.0:1.0]\n");
     //fprintf(output, "set yrange [-1.0:1.0]\n");
-    fprintf(output, "set zrange [0.0:0.05]\n");
+    //fprintf(output, "set zrange [0.0:0.05]\n");
 
 
     fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Z', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'X', '-' with points pointtype 7 ps 1 lc rgb 'black' title 'Marker'\n");
