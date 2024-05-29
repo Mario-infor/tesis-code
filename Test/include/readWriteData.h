@@ -4,6 +4,7 @@
 #include <vector>
 #include <structsFile.h>
 #include <RingBuffer.h>
+#include <Eigen/Dense>
 
 // Write IMU data to files.
 void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer);

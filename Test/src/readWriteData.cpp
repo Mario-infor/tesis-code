@@ -1,3 +1,8 @@
+#if __INTELLISENSE__
+#undef __ARM_NEON
+#undef __ARM_NEON__
+#endif
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/aruco.hpp>
@@ -253,6 +258,44 @@ void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsV
                 else if (tempMarkerId == 80)
                     cameraRotationsFile4 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
             }
+        }
+    }
+}
+
+void 3DPointsDataWrite(std::vector<Eigen::Vector3d> vectorOfPointsOne, std::vector<Eigen::Vector3d> vectorOfPointsTwo, float timeStamp)
+{
+    std::string tempNameIMUTime = dirIMUFolder + "IMUTime";
+    std::string tempNameIMUData = dirIMUFolder + "IMUData";
+
+    std::ofstream IMUTimeFile(tempNameIMUTime, std::ios::out);
+    std::ofstream IMUDataFile(tempNameIMUData, std::ios::out);
+
+    if (IMUTimeFile.is_open() && IMUDataFile.is_open())
+    {
+        while (!imuDataJetsonBuffer.QueueIsEmpty())
+        {
+            ImuInputJetson tempIMU;
+            imuDataJetsonBuffer.Dequeue(tempIMU);
+
+            IMUTimeFile << tempIMU.time << std::endl;
+
+            IMUDataFile << tempIMU.index << std::endl;
+            IMUDataFile << tempIMU.gyroVect.x << std::endl;
+            IMUDataFile << tempIMU.gyroVect.y << std::endl;
+            IMUDataFile << tempIMU.gyroVect.z << std::endl;
+            IMUDataFile << tempIMU.eulerVect.x << std::endl;
+            IMUDataFile << tempIMU.eulerVect.y << std::endl;
+            IMUDataFile << tempIMU.eulerVect.z << std::endl;
+            IMUDataFile << tempIMU.rotQuat.w << std::endl;
+            IMUDataFile << tempIMU.rotQuat.x << std::endl;
+            IMUDataFile << tempIMU.rotQuat.y << std::endl;
+            IMUDataFile << tempIMU.rotQuat.z << std::endl;
+            IMUDataFile << tempIMU.accVect.x << std::endl;
+            IMUDataFile << tempIMU.accVect.y << std::endl;
+            IMUDataFile << tempIMU.accVect.z << std::endl;
+            IMUDataFile << tempIMU.gravVect.x << std::endl;
+            IMUDataFile << tempIMU.gravVect.y << std::endl;
+            IMUDataFile << tempIMU.gravVect.z << std::endl;
         }
     }
 }
