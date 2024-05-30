@@ -251,9 +251,9 @@ void updateTransitionMatrixFusion(cv::KalmanFilter &KF, float deltaT, int stateS
 {
     float dT2 = deltaT / 2;
 
-    float w1 = KF.statePost.at<float>(10);
-    float w2 = KF.statePost.at<float>(11);
-    float w3 = KF.statePost.at<float>(12);
+    float w1 = KF.statePre.at<float>(10);
+    float w2 = KF.statePre.at<float>(11);
+    float w3 = KF.statePre.at<float>(12);
     
     KF.transitionMatrix =
         (cv::Mat_<float>(stateSize, stateSize) << 
@@ -571,6 +571,9 @@ void runCameraAndIMUKalmanFilter()
                 Eigen::Matrix3d camRot;
                 Eigen::Quaterniond camQuat;
 
+                float deltaTCamMeasurement = tempCameraData.time - cameraData.at(indexCamera - 1).time;
+                deltaTCamMeasurement /= 1000;
+
                 for (size_t j = 0; j < frameMarkersData.markerIds.size(); j++)
                 {
                     //Eigen::Vector3d markerPos = Gcm.block<3, 1>(0, 3);
@@ -604,7 +607,7 @@ void runCameraAndIMUKalmanFilter()
                     camRot = Gmc.block<3,3>(0,0);
                     camQuat = Eigen::Quaterniond(camRot);
 
-                    Eigen::Vector3d w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCam);
+                    Eigen::Vector3d w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCamMeasurement);
                     std::cout << "w: " << std::endl << w << std::endl << std::endl;
 
                     float angSpeedDiffNorm = (oldCamAngSpeed - w).norm();
@@ -623,9 +626,9 @@ void runCameraAndIMUKalmanFilter()
                     measurementCam(4) = camQuat.x();
                     measurementCam(5) = camQuat.y();
                     measurementCam(6) = camQuat.z();
-                    measurementCam(7) = (measurementCam(0) - oldCamT(0)) / deltaTCam; // traslation speed (x)
-                    measurementCam(8) = (measurementCam(1) - oldCamT(1)) / deltaTCam; // traslation speed (y)
-                    measurementCam(9) = (measurementCam(2) - oldCamT(2)) / deltaTCam; // traslation speed (z)
+                    measurementCam(7) = (measurementCam(0) - oldCamT(0)) / deltaTCamMeasurement; // traslation speed (x)
+                    measurementCam(8) = (measurementCam(1) - oldCamT(1)) / deltaTCamMeasurement; // traslation speed (y)
+                    measurementCam(9) = (measurementCam(2) - oldCamT(2)) / deltaTCamMeasurement; // traslation speed (z)
                     measurementCam(10) = w.x(); // angular speed (x)
                     measurementCam(11) = w.y(); // angular speed (y)
                     measurementCam(12) = w.z(); // angular speed (z)
@@ -690,7 +693,7 @@ void runCameraAndIMUKalmanFilter()
 
                 Eigen::Vector3d oldDeltaVel = deltaVel;
 
-                deltaPos = Eigen::Vector3d(Gmi.block<3, 1>(0, 3));
+                deltaPos = Eigen::Vector3d(Gmi.block<3, 1>(0, 3)); // Delete Eigen::Vector3d
                 firstImuRot = Gmi.block<3, 3>(0, 0);
                 deltaVel = Eigen::Vector3d(imuGhi.block<3, 1>(0, 3));
                 firstImuGyro = Eigen::Vector3d{imuGhi(2, 1), imuGhi(0, 2), imuGhi(1, 0)};
@@ -787,6 +790,8 @@ void runCameraAndIMUKalmanFilter()
                 std::cout << "State Post: " << std::endl << KF.statePost << std::endl << std::endl;
 
                 lastOneWasCamera = false;
+
+            
             }
         }
         else

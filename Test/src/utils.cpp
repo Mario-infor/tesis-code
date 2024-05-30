@@ -485,27 +485,27 @@ void calculateHAndJacobian(
     Eigen::Matrix<double, 13, 13> &H
     )
 {
-    float t1_gmc = KF.statePost.at<float>(0);
-    float t2_gmc = KF.statePost.at<float>(1);
-    float t3_gmc = KF.statePost.at<float>(2);
+    float t1_gmc = KF.statePre.at<float>(0);
+    float t2_gmc = KF.statePre.at<float>(1);
+    float t3_gmc = KF.statePre.at<float>(2);
 
-    float q0 = KF.statePost.at<float>(3);
-    float q1 = KF.statePost.at<float>(4);
-    float q2 = KF.statePost.at<float>(5);
-    float q3 = KF.statePost.at<float>(6);
+    float q0 = KF.statePre.at<float>(3);
+    float q1 = KF.statePre.at<float>(4);
+    float q2 = KF.statePre.at<float>(5);
+    float q3 = KF.statePre.at<float>(6);
 
     float q0_2 = q0*q0;
     float q1_2 = q1*q1;
     float q2_2 = q2*q2;
     float q3_2 = q3*q3;
 
-    float v1 = KF.statePost.at<float>(7);
-    float v2 = KF.statePost.at<float>(8);
-    float v3 = KF.statePost.at<float>(9);
+    float v1 = KF.statePre.at<float>(7);
+    float v2 = KF.statePre.at<float>(8);
+    float v3 = KF.statePre.at<float>(9);
 
-    float w0 = KF.statePost.at<float>(10);
-    float w1 = KF.statePost.at<float>(11);
-    float w2 = KF.statePost.at<float>(12);
+    float w0 = KF.statePre.at<float>(10);
+    float w1 = KF.statePre.at<float>(11);
+    float w2 = KF.statePre.at<float>(12);
 
     float r00_gci_inv = Gci_inv(0,0);
     float r01_gci_inv = Gci_inv(0,1);
