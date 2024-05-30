@@ -435,7 +435,9 @@ void runCameraAndIMUKalmanFilter()
     std::vector<Eigen::Vector3d> vectorOfPointsTwo;
     std::vector<Eigen::Vector3d> vectorOfMarkers;
     std::vector<TransformBetweenMarkers> vectorOfTransforms;
-     std::vector<Eigen::Vector3d> vectorErrorPoints;
+    std::vector<Eigen::Vector3d> vectorErrorPoints;
+
+    std::vector<float> timeStamps;
 
     //Eigen::Vector3d origin{0, 0, 0};
     //vectorOfMarkers.push_back(origin);
@@ -944,7 +946,7 @@ void runCameraAndIMUKalmanFilter()
 
         printErrorX += 0.1;
         
-        if (vectorOfPointsOne.size() > 50)
+        if (vectorOfPointsOne.size() > 5000)
         {
             vectorOfPointsOne.erase(vectorOfPointsOne.begin());
             vectorOfPointsTwo.erase(vectorOfPointsTwo.begin());
@@ -953,14 +955,20 @@ void runCameraAndIMUKalmanFilter()
         vectorOfPointsOne.push_back(PosOriginal);
         vectorOfPointsTwo.push_back(PosKF);
         
+        if(lastOneWasCamera)
+            timeStamps.push_back(oldDeltaTCam);
+        else
+            timeStamps.push_back(oldDeltaTImu);
+
         //vectorOfPointsOne.push_back(printPosError);
         //vectorOfPointsTwo.push_back(Eigen::Vector3d{0,0,0});
         
-        gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
+        //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
 
         //vectorOfMarkers.clear();
         if (indexCamera == (int)cameraData.size() - 1)
         {
+            pointsDataWrite(vectorOfPointsOne, vectorOfPointsTwo, timeStamps);
             break;
         }   
     }

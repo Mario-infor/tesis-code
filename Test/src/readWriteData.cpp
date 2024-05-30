@@ -14,6 +14,7 @@
 #include <RingBuffer.h>
 
 std::string dirRotationsFolder = "/home/nvidia/Mario/tesis-code/Test/data/rotations/";
+std::string dirPointsFolder = "/home/nvidia/Mario/tesis-code/Test/data/points_data/";
 
 std::string dirCameraFolder = "/home/nvidia/Mario/tesis-code/Test/data/dynamic_data/camera/";
 std::string dirIMUFolder = "/home/nvidia/Mario/tesis-code/Test/data/dynamic_data/imu/";
@@ -262,40 +263,25 @@ void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsV
     }
 }
 
-void 3DPointsDataWrite(std::vector<Eigen::Vector3d> vectorOfPointsOne, std::vector<Eigen::Vector3d> vectorOfPointsTwo, float timeStamp)
+void pointsDataWrite(std::vector<Eigen::Vector3d> vectorOfPointsOne, std::vector<Eigen::Vector3d> vectorOfPointsTwo, std::vector<float> timeStamps)
 {
-    std::string tempNameIMUTime = dirIMUFolder + "IMUTime";
-    std::string tempNameIMUData = dirIMUFolder + "IMUData";
+    std::string tempNamePointsData = dirPointsFolder + "pointsData";
 
-    std::ofstream IMUTimeFile(tempNameIMUTime, std::ios::out);
-    std::ofstream IMUDataFile(tempNameIMUData, std::ios::out);
+    std::ofstream PointsFile(tempNamePointsData, std::ios::out);
 
-    if (IMUTimeFile.is_open() && IMUDataFile.is_open())
+    if (PointsFile.is_open())
     {
-        while (!imuDataJetsonBuffer.QueueIsEmpty())
+        for (size_t i = 0; i < vectorOfPointsOne.size(); i++)
         {
-            ImuInputJetson tempIMU;
-            imuDataJetsonBuffer.Dequeue(tempIMU);
+            PointsFile << timeStamps.at(i) << ",";
 
-            IMUTimeFile << tempIMU.time << std::endl;
+            PointsFile << vectorOfPointsOne.at(i).x() << ",";
+            PointsFile << vectorOfPointsOne.at(i).y() << ",";
+            PointsFile << vectorOfPointsOne.at(i).z() << ",";
 
-            IMUDataFile << tempIMU.index << std::endl;
-            IMUDataFile << tempIMU.gyroVect.x << std::endl;
-            IMUDataFile << tempIMU.gyroVect.y << std::endl;
-            IMUDataFile << tempIMU.gyroVect.z << std::endl;
-            IMUDataFile << tempIMU.eulerVect.x << std::endl;
-            IMUDataFile << tempIMU.eulerVect.y << std::endl;
-            IMUDataFile << tempIMU.eulerVect.z << std::endl;
-            IMUDataFile << tempIMU.rotQuat.w << std::endl;
-            IMUDataFile << tempIMU.rotQuat.x << std::endl;
-            IMUDataFile << tempIMU.rotQuat.y << std::endl;
-            IMUDataFile << tempIMU.rotQuat.z << std::endl;
-            IMUDataFile << tempIMU.accVect.x << std::endl;
-            IMUDataFile << tempIMU.accVect.y << std::endl;
-            IMUDataFile << tempIMU.accVect.z << std::endl;
-            IMUDataFile << tempIMU.gravVect.x << std::endl;
-            IMUDataFile << tempIMU.gravVect.y << std::endl;
-            IMUDataFile << tempIMU.gravVect.z << std::endl;
+            PointsFile << vectorOfPointsTwo.at(i).x() << ",";
+            PointsFile << vectorOfPointsTwo.at(i).y() << ",";
+            PointsFile << vectorOfPointsTwo.at(i).z() << std::endl;
         }
     }
 }
