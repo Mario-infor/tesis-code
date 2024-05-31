@@ -577,7 +577,7 @@ void runCameraAndIMUKalmanFilter()
                 for (size_t j = 0; j < frameMarkersData.markerIds.size(); j++)
                 {
                     //Eigen::Vector3d markerPos = Gcm.block<3, 1>(0, 3);
-                    //vectorOfMarkers.push_back(markerPos);
+                    vectorOfMarkers.push_back(markerPos);
                 
                     if(frameMarkersData.markerIds[j] == BASE_MARKER_ID)
                     {
@@ -903,7 +903,7 @@ void runCameraAndIMUKalmanFilter()
 
         printErrorX += 0.1;
         
-        if (vectorOfPointsOne.size() > 5000)
+        if (vectorOfPointsOne.size() > 20)
         {
             vectorOfPointsOne.erase(vectorOfPointsOne.begin());
             vectorOfPointsTwo.erase(vectorOfPointsTwo.begin());
@@ -920,7 +920,7 @@ void runCameraAndIMUKalmanFilter()
         //vectorOfPointsOne.push_back(printPosError);
         //vectorOfPointsTwo.push_back(Eigen::Vector3d{0,0,0});
         
-        //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
+        gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
 
         if (indexCamera == (int)cameraData.size() - 1)
         {
