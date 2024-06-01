@@ -26,6 +26,10 @@ std::vector<CameraInput> readDataCamera();
 // Read IMU data from files.
 std::vector<ImuInputJetson> readDataIMUJetson();
 
-void pointsDataWrite(std::vector<Eigen::Vector3d> vectorOfPointsOne, std::vector<Eigen::Vector3d> vectorOfPointsTwo, std::vector<float> timeStamps);
+void pointsDataWrite(
+    std::vector<Eigen::VectorXd> vectorOfPointsOne,
+    std::vector<Eigen::VectorXd> vectorOfPointsTwo,
+    std::vector<float> timeStamps,
+    std::string fileName);
 
 #endif // READWRITEDATA_H

@@ -409,6 +409,14 @@ void runCameraAndIMUKalmanFilter()
     std::vector<Eigen::Vector3d> vectorOfMarkers;
     std::vector<TransformBetweenMarkers> vectorOfTransforms;
     std::vector<Eigen::Vector3d> vectorErrorPoints;
+    std::vector<Eigen::VectorXd> vectorCamMeasurenments;
+    std::vector<Eigen::VectorXd> vectorStates;
+
+    std::vector<Eigen::VectorXd> vectorImuAcc;
+    std::vector<Eigen::VectorXd> vectorIIRAcc;
+
+    std::vector<Eigen::VectorXd> vectorImuGyro;
+    std::vector<Eigen::VectorXd> vectorIIRGyro;
 
     std::vector<float> timeStamps;
 
@@ -427,8 +435,8 @@ void runCameraAndIMUKalmanFilter()
     FrameMarkersData firstFrameMarkersData = getRotationTraslationFromFrame(firstCamMeasurement,
          dictionary, cameraMatrix, distCoeffs);
 
-    int const stateSize = 13;
-    int const measurementSize = 13;
+    int stateSize = 13;
+    int measurementSize = 13;
     int cameraIgnoredTimes = 0;
     int indexCamera = 0;
     int indexImu = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
@@ -469,10 +477,10 @@ void runCameraAndIMUKalmanFilter()
     std::cout << "measurementNoiseCovCam: " << std::endl << measurementNoiseCovCam << std::endl << std::endl;
     std::cout << "measurementNoiseCovImu: " << std::endl << measurementNoiseCovImu << std::endl << std::endl;
     
-    Eigen::Matrix<double, measurementSize, 1> measurementCam;
+    Eigen::MatrixXd measurementCam(measurementSize, 1);
     measurementCam.setZero();
 
-    Eigen::Matrix<double, measurementSize, 1> measurementImu;
+    Eigen::MatrixXd measurementImu(measurementSize, 1);
     measurementImu.setZero();
 
     initKalmanFilter(KF, stateSize);
@@ -527,11 +535,25 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Vector3d firstImuGyro;
     Eigen::Vector3d firstImuAcc;
 
+    Eigen::Vector3d accFiltered;
+    Eigen::Vector3d gyroFiltered;
+    accFiltered.setZero();
+    gyroFiltered.setZero();
+
     FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
          dictionary, cameraMatrix, distCoeffs);
 
     Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
     Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+
+    applyIIRFilterToAccAndGyro(acc, gyro, accFiltered, gyroFiltered);
+
+    vectorImuGyro.push_back(gyro);
+    vectorIIRGyro.push_back(gyroFiltered);
+
+    vectorImuAcc.push_back(acc);
+    vectorIIRAcc.push_back(accFiltered);
+
     Eigen::Quaterniond imuQuat{
         tempImuData.rotQuat[0],
         tempImuData.rotQuat[1],
@@ -571,18 +593,29 @@ void runCameraAndIMUKalmanFilter()
                 Eigen::Matrix3d camRot;
                 Eigen::Quaterniond camQuat;
 
+                 if(lastOneWasCamera)
+                    deltaTCam = tempCameraData.time - oldDeltaTCam;
+                else
+                    deltaTCam = tempCameraData.time - oldDeltaTImu;
+                deltaTCam /= 1000;
+
+                updateTransitionMatrixFusion(KF, deltaTCam, stateSize);
+
+                predict(KF);
+                fixStateQuaternion(KF, "pre");
+
                 float deltaTCamMeasurement = tempCameraData.time - cameraData.at(indexCamera - 1).time;
                 deltaTCamMeasurement /= 1000;
 
                 for (size_t j = 0; j < frameMarkersData.markerIds.size(); j++)
                 {
-                    //Eigen::Vector3d markerPos = Gcm.block<3, 1>(0, 3);
-                    vectorOfMarkers.push_back(markerPos);
+                    Eigen::Vector3d markerPos = Gcm.block<3, 1>(0, 3);
+                    //vectorOfMarkers.push_back(markerPos);
                 
                     if(frameMarkersData.markerIds[j] == BASE_MARKER_ID)
                     {
                         Gcm = getGFromFrameMarkersData(frameMarkersData, j);
-                        vectorOfMarkers.push_back(Eigen::Vector3d{0,0,0});
+                        //vectorOfMarkers.push_back(Eigen::Vector3d{0,0,0});
                     }
                     else
                     {
@@ -594,8 +627,8 @@ void runCameraAndIMUKalmanFilter()
                             {
                                 Gcm = tempG * vectorOfTransforms[k].G;
 
-                                Eigen::Vector3d markerPos = invertG(vectorOfTransforms[k].G).block<3, 1>(0, 3);
-                                vectorOfMarkers.push_back(markerPos);
+                                //Eigen::Vector3d markerPos = invertG(vectorOfTransforms[k].G).block<3, 1>(0, 3);
+                                //vectorOfMarkers.push_back(markerPos);
                                 break;
                             }
                         }
@@ -641,17 +674,6 @@ void runCameraAndIMUKalmanFilter()
                     std::cout << "statePost: " << std::endl << KF.statePost << std::endl << std::endl;
                     std::cout << "measurementCam: " << std::endl << measurementCam << std::endl << std::endl;
                 }
-
-                if(lastOneWasCamera)
-                    deltaTCam = tempCameraData.time - oldDeltaTCam;
-                else
-                    deltaTCam = tempCameraData.time - oldDeltaTImu;
-                deltaTCam /= 1000;
-
-                updateTransitionMatrixFusion(KF, deltaTCam, stateSize);
-
-                predict(KF);
-                fixStateQuaternion(KF, "pre");
                 
                 oldDeltaTCam = tempCameraData.time;
                 oldCamT = camT;
@@ -659,7 +681,7 @@ void runCameraAndIMUKalmanFilter()
                 oldCamAngSpeed = measurementCam.block<3,1>(10,0);
                 oldGmc = Gmc;
                 
-                Eigen::Vector3d camLinearSpeed{KF.statePost.at<float>(7), KF.statePost.at<float>(8), KF.statePost.at<float>(9)};
+                Eigen::Vector3d camLinearSpeed{KF.statePre.at<float>(7), KF.statePre.at<float>(8), KF.statePre.at<float>(9)};
                 Eigen::Vector3d newLinearAcc = (camLinearSpeed - oldCamLinearSpeed) / deltaTCam;
                 Eigen::Vector4d homogeneusNewLinearSpeed;
                 homogeneusNewLinearSpeed << newLinearAcc, 1;
@@ -668,10 +690,10 @@ void runCameraAndIMUKalmanFilter()
 
                 // Reset IMU information.
 
-                Eigen::Quaterniond stateQuat(KF.statePost.at<float>(3), KF.statePost.at<float>(4),
-                    KF.statePost.at<float>(5), KF.statePost.at<float>(6));
+                Eigen::Quaterniond stateQuat(KF.statePre.at<float>(3), KF.statePre.at<float>(4),
+                    KF.statePre.at<float>(5), KF.statePre.at<float>(6));
                 Eigen::Matrix<double, 3, 3> stateRot = stateQuat.toRotationMatrix();
-                Eigen::Vector3d statePos(KF.statePost.at<float>(0), KF.statePost.at<float>(1), KF.statePost.at<float>(2));
+                Eigen::Vector3d statePos(KF.statePre.at<float>(0), KF.statePre.at<float>(1), KF.statePre.at<float>(2));
                
                 Eigen::Matrix4d resetGmi;
                 resetGmi.setIdentity();
@@ -682,9 +704,9 @@ void runCameraAndIMUKalmanFilter()
                 
                 Eigen::Matrix4d stateGhi;
                 stateGhi << 
-                    0,                              -KF.statePost.at<float>(12),    KF.statePost.at<float>(11),     KF.statePost.at<float>(7),
-                    KF.statePost.at<float>(12),     0,                              -KF.statePost.at<float>(10),    KF.statePost.at<float>(8),
-                    -KF.statePost.at<float>(11),    KF.statePost.at<float>(10),     0,                              KF.statePost.at<float>(9),
+                    0,                              -KF.statePre.at<float>(12),    KF.statePre.at<float>(11),     KF.statePre.at<float>(7),
+                    KF.statePre.at<float>(12),     0,                              -KF.statePre.at<float>(10),    KF.statePre.at<float>(8),
+                    -KF.statePre.at<float>(11),    KF.statePre.at<float>(10),     0,                              KF.statePre.at<float>(9),
                     0,0,0,0;
                 
                 Eigen::Matrix4d imuGhi = Gci * stateGhi * invertG(Gci);
@@ -697,8 +719,8 @@ void runCameraAndIMUKalmanFilter()
                 firstImuRot = Gmi.block<3, 3>(0, 0);
                 deltaVel = Eigen::Vector3d(imuGhi.block<3, 1>(0, 3));
                 firstImuGyro = Eigen::Vector3d{imuGhi(2, 1), imuGhi(0, 2), imuGhi(1, 0)};
-                //firstImuAcc = Eigen::Vector3d{homogeneusImuAcc(0), homogeneusImuAcc(1), homogeneusImuAcc(2)};
-                firstImuAcc = (deltaVel-oldDeltaVel)/(deltaTCam*1000);
+                firstImuAcc = Eigen::Vector3d{homogeneusImuAcc(0), homogeneusImuAcc(1), homogeneusImuAcc(2)};
+                //firstImuAcc = (deltaVel-oldDeltaVel)/(deltaTCam);
 
                 std::cout << "deltaPos: " << std::endl << deltaPos << std::endl << std::endl;
                 std::cout << "oldDeltaVel: " << std::endl << oldDeltaVel << std::endl << std::endl;
@@ -714,6 +736,15 @@ void runCameraAndIMUKalmanFilter()
 
                 Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
                 Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+
+                applyIIRFilterToAccAndGyro(acc, gyro, accFiltered, gyroFiltered);
+
+                vectorImuGyro.push_back(gyro);
+                vectorIIRGyro.push_back(gyroFiltered);
+
+                vectorImuAcc.push_back(acc);
+                vectorIIRAcc.push_back(accFiltered);
+
                 Eigen::Quaterniond imuQuat{
                     tempImuData.rotQuat[0],
                     tempImuData.rotQuat[1],
@@ -729,13 +760,21 @@ void runCameraAndIMUKalmanFilter()
 
                 deltaTImu /= 1000;
 
+                updateTransitionMatrixFusion(KF, deltaTImu, stateSize);
+
+                predict(KF);
+                fixStateQuaternion(KF, "pre");
+
+                std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
+                std::cout << "State Post: " << std::endl << KF.statePost << std::endl << std::endl;
+
                 /////////////////////////// Measurenment ////////////////////////////////////
 
                 Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
 
                 Eigen::Matrix3d imuRotFromNewOrigen = firstImuRot.transpose() * imuRot;
-                Eigen::Vector3d imuGyroFromNewOrigen = gyro - firstImuGyro;
-                Eigen::Vector3d imuAccFromNewOrigen = acc - firstImuAcc;
+                Eigen::Vector3d imuGyroFromNewOrigen = gyroFiltered - firstImuGyro;
+                Eigen::Vector3d imuAccFromNewOrigen = accFiltered - firstImuAcc;
                 //Eigen::Matrix<double, 3, 3> imuRotFromNewOrigen = imuRot;
 
                 Eigen::Quaterniond imuQuatNewOrigen(imuRotFromNewOrigen);
@@ -766,8 +805,8 @@ void runCameraAndIMUKalmanFilter()
 
                 /////////////////////////// Update ////////////////////////////////////
 
-                Eigen::Matrix<double, measurementSize, 1> h;
-                Eigen::Matrix<double, measurementSize, measurementSize> H;
+                Eigen::MatrixXd h(measurementSize, 1);
+                Eigen::MatrixXd H(measurementSize, stateSize);
                 h.setZero();
                 H.setZero();
 
@@ -781,17 +820,7 @@ void runCameraAndIMUKalmanFilter()
 
                 oldCamLinearSpeed = Eigen::Vector3d{ KF.statePost.at<float>(7),  KF.statePost.at<float>(8),  KF.statePost.at<float>(9)};
 
-                updateTransitionMatrixFusion(KF, deltaTImu, stateSize);
-
-                predict(KF);
-                fixStateQuaternion(KF, "pre");
-
-                std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
-                std::cout << "State Post: " << std::endl << KF.statePost << std::endl << std::endl;
-
                 lastOneWasCamera = false;
-
-            
             }
         }
         else
@@ -861,13 +890,13 @@ void runCameraAndIMUKalmanFilter()
 
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
             firstImuRot = imuRot;
-            firstImuGyro = gyro;
-            firstImuAcc = acc;
-            imuPreintegration(deltaTImu, acc, gyro, deltaPos, deltaVel, imuRot);
+            firstImuGyro = gyroFiltered;
+            firstImuAcc = accFiltered;
+            imuPreintegration(deltaTImu, accFiltered, gyroFiltered, deltaPos, deltaVel, imuRot);
 
-            measurementImu(0,0) = gyro[0];
-            measurementImu(1,0) = gyro[1];
-            measurementImu(2,0) = gyro[2];
+            measurementImu(0,0) = gyroFiltered[0];
+            measurementImu(1,0) = gyroFiltered[1];
+            measurementImu(2,0) = gyroFiltered[2];
             measurementImu(3,0) = imuQuat.w();
             measurementImu(4,0) = imuQuat.x();
             measurementImu(5,0) = imuQuat.y();
@@ -880,10 +909,6 @@ void runCameraAndIMUKalmanFilter()
             measurementImu(12,0) = deltaPos[2];
 
             oldDeltaTImu = tempImuData.time;
-
-
-            predict(KF);
-            fixStateQuaternion(KF, "pre");
             
             firstRun = false;
         }
@@ -903,7 +928,7 @@ void runCameraAndIMUKalmanFilter()
 
         printErrorX += 0.1;
         
-        if (vectorOfPointsOne.size() > 20)
+        if (vectorOfPointsOne.size() > 50)
         {
             vectorOfPointsOne.erase(vectorOfPointsOne.begin());
             vectorOfPointsTwo.erase(vectorOfPointsTwo.begin());
@@ -922,14 +947,20 @@ void runCameraAndIMUKalmanFilter()
         
         gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
 
+        vectorCamMeasurenments.push_back(measurementCam);
+        vectorStates.push_back(convertOpencvMatToEigenMat(KF.statePost));
+
         if (indexCamera == (int)cameraData.size() - 1)
         {
-            pointsDataWrite(vectorOfPointsOne, vectorOfPointsTwo, timeStamps);
+            //pointsDataWrite(vectorCamMeasurenments, vectorStates, timeStamps, "cameraVsKalman.csv");
+            pointsDataWrite(vectorImuGyro, vectorIIRGyro, timeStamps, "imuGyroVsIIR.csv");
+            pointsDataWrite(vectorImuAcc, vectorIIRAcc, timeStamps, "imuAccVsIIR.csv");
+
             break;
         }   
     }
 
-    float averageError = 0;
+     float averageError = 0;
 
     for (size_t i = 0; i < vectorOfPointsOne.size(); i++)
     {
@@ -1458,8 +1489,8 @@ int main()
 
     if (ifCalibrateIMUOnly)
     {
-        imuCalibration();
-        //printIMUData();
+        //imuCalibration();
+        printIMUData();
     }
     else if (runKalmanFilterBool)
     {

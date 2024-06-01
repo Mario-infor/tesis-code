@@ -102,9 +102,10 @@ void printIMUData()
     while (true)
     {
         sensors.readAll();
+        sensors.readAxisRemap();
         wmove(win, 5, 2);
 
-        float tempMaxX = sensors.accelVect.vi[0] * sensors.Scale;
+        /* float tempMaxX = sensors.accelVect.vi[0] * sensors.Scale;
         float tempMaxY = sensors.accelVect.vi[1] * sensors.Scale;
         float tempMaxZ = sensors.accelVect.vi[2] * sensors.Scale;
 
@@ -117,13 +118,23 @@ void printIMUData()
         if (tempMaxZ > maxZ)
             maxZ = tempMaxZ;
 
-        // snprintf(buff, 511, "Acc = {X=%f, Y=%f, Z=%f}", maxX, maxY, maxZ);
+        snprintf(buff, 511, "Acc = {X=%f, Y=%f, Z=%f}", maxX, maxY, maxZ); */
 
-        snprintf(buff, 79, "EULER=[%07.5lf, %07.5lf, %07.3lf]",
+        /* snprintf(buff, 79, "EULER=[%07.5lf, %07.5lf, %07.3lf]",
                  sensors.eOrientation.vi[0] * sensors.Scale * MATH_RAD_TO_DEGREE,
                  sensors.eOrientation.vi[1] * sensors.Scale * MATH_RAD_TO_DEGREE,
-                 sensors.eOrientation.vi[2] * sensors.Scale * MATH_RAD_TO_DEGREE);
+                 sensors.eOrientation.vi[2] * sensors.Scale * MATH_RAD_TO_DEGREE); */
+        wmove(win, 5, 2);
+        snprintf(buff, 512, "Gravity=[%07.5lf, %07.5lf, %07.3lf]",
+                 sensors.gravVect.vi[0] * 0.01,
+                 sensors.gravVect.vi[1] * 0.01,
+                 sensors.gravVect.vi[2] * 0.01);
+        waddstr(win, buff);
 
+        wmove(win, 7, 2);
+        snprintf(buff, 512, "axis=[axisConfig=%d, axisSign=%d]",
+                 sensors.axisConfig,
+                 sensors.axisSign);
         waddstr(win, buff);
 
         wrefresh(win);
@@ -431,6 +442,21 @@ cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat)
     return opencvMat;
 }
 
+Eigen::MatrixXd convertOpencvMatToEigenMat(cv::Mat cvMat)
+{
+    Eigen::MatrixXd eigenMat(cvMat.rows, cvMat.cols);
+
+    for (int i = 0; i < cvMat.rows; i++)
+    {
+        for (int j = 0; j < cvMat.cols; j++)
+        {
+            eigenMat(i, j) = cvMat.at<float>(i,j);
+        }
+    }
+
+    return eigenMat;
+}
+
 Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec)
 {
     cv::Mat camRotMat;
@@ -481,8 +507,8 @@ void calculateHAndJacobian(
     cv::KalmanFilter KF,
     Eigen::Matrix<double, 4, 4> Gci,
     Eigen::Matrix<double, 4, 4> Gci_inv,
-    Eigen::Matrix<double, 13, 1> &h,
-    Eigen::Matrix<double, 13, 13> &H
+    Eigen::MatrixXd &h,
+    Eigen::MatrixXd &H
     )
 {
     float t1_gmc = KF.statePre.at<float>(0);
@@ -704,4 +730,14 @@ std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkers
         }
     }
     return transforms;
+}
+
+void applyIIRFilterToAccAndGyro(
+    Eigen::Vector3d accReading,
+    Eigen::Vector3d gyroReading,
+    Eigen::Vector3d &accFiltered,
+    Eigen::Vector3d &gyroFiltered)
+{
+    accFiltered = ALPHA_ACC * accFiltered + (1 - ALPHA_ACC) * accReading;
+    gyroFiltered = ALPHA_GYRO * gyroFiltered + (1 - ALPHA_GYRO) * gyroReading;
 }

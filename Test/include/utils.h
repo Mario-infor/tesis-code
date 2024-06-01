@@ -11,6 +11,8 @@
 #define	MATH_PI					3.1415926535 // Definition of variable pi.
 #define	MATH_DEGREE_TO_RAD		(MATH_PI / 180.0) // Conversion from degrees to radians.
 #define	MATH_RAD_TO_DEGREE		(180.0 / MATH_PI) // Conversion from radians to degrees.
+#define ALPHA_ACC 0.7 // Alpha value for the accelerometer IIR.
+#define ALPHA_GYRO 0.3 // Alpha value for the gyroscope IIR.
 
 // Convert rotation vector to quaternion.
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect);
@@ -93,6 +95,7 @@ Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT);
 void normalizeDataSet(std::vector<Eigen::Vector3d> points, std::vector<float> &result, int variable);
 
 cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat);
+Eigen::MatrixXd convertOpencvMatToEigenMat(cv::Mat cvMat);
 
 Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec);
 
@@ -104,8 +107,8 @@ void calculateHAndJacobian(
     cv::KalmanFilter KF,
     Eigen::Matrix<double, 4, 4> Gci,
     Eigen::Matrix<double, 4, 4> Gci_inv,
-    Eigen::Matrix<double, 13, 1> &h,
-    Eigen::Matrix<double, 13, 13> &H
+    Eigen::MatrixXd &h,
+    Eigen::MatrixXd &H
 );
 
 Eigen::Matrix4d invertG(Eigen::Matrix4d G);
@@ -115,5 +118,11 @@ void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName);
 int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId);
 
 std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkersData firstFrameMarkersData, Eigen::Matrix4d Gcm, int indexBaseMarker);
+
+void applyIIRFilterToAccAndGyro(
+    Eigen::Vector3d accReading,
+    Eigen::Vector3d gyroReading,
+    Eigen::Vector3d &accFiltered,
+    Eigen::Vector3d &gyroFiltered);
 
 #endif // UTILS_H

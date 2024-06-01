@@ -263,9 +263,13 @@ void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsV
     }
 }
 
-void pointsDataWrite(std::vector<Eigen::Vector3d> vectorOfPointsOne, std::vector<Eigen::Vector3d> vectorOfPointsTwo, std::vector<float> timeStamps)
+void pointsDataWrite(
+    std::vector<Eigen::VectorXd> vectorOfPointsOne,
+    std::vector<Eigen::VectorXd> vectorOfPointsTwo,
+    std::vector<float> timeStamps,
+    std::string fileName)
 {
-    std::string tempNamePointsData = dirPointsFolder + "pointsData";
+    std::string tempNamePointsData = dirPointsFolder + fileName;
 
     std::ofstream PointsFile(tempNamePointsData, std::ios::out);
 
@@ -275,13 +279,23 @@ void pointsDataWrite(std::vector<Eigen::Vector3d> vectorOfPointsOne, std::vector
         {
             PointsFile << timeStamps.at(i) << ",";
 
-            PointsFile << vectorOfPointsOne.at(i).x() << ",";
-            PointsFile << vectorOfPointsOne.at(i).y() << ",";
-            PointsFile << vectorOfPointsOne.at(i).z() << ",";
+            for (int j = 0; j < vectorOfPointsOne.at(i).rows(); j++)
+            {
+                PointsFile << vectorOfPointsOne.at(i)(j) << ",";
+            }
 
-            PointsFile << vectorOfPointsTwo.at(i).x() << ",";
-            PointsFile << vectorOfPointsTwo.at(i).y() << ",";
-            PointsFile << vectorOfPointsTwo.at(i).z() << std::endl;
+            for (int j = 0; j < vectorOfPointsTwo.at(i).rows(); j++)
+            {
+                if (j == vectorOfPointsTwo.at(i).rows() - 1)
+                {
+                    PointsFile << vectorOfPointsTwo.at(i)(j) << std::endl;
+                    
+                }
+                else
+                {
+                    PointsFile << vectorOfPointsTwo.at(i)(j) << ",";
+                }
+            }
         }
     }
 }
