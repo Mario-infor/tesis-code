@@ -424,9 +424,6 @@ void runCameraAndIMUKalmanFilter()
 
     std::vector<float> timeStamps;
 
-    //Eigen::Vector3d origin{0, 0, 0};
-    //vectorOfMarkers.push_back(origin);
-
     FILE *output;
     output = popen("gnuplot", "w");
 
@@ -480,9 +477,6 @@ void runCameraAndIMUKalmanFilter()
     cv::KalmanFilter KF(stateSize, measurementSize, 0);
     cv::Mat measurementNoiseCovCam = cv::Mat::eye(measurementSize, measurementSize, CV_32F) * 1e-3;
     cv::Mat measurementNoiseCovImu = cv::Mat::eye(measurementSize, measurementSize, CV_32F) * 1e-2;
-
-    std::cout << "measurementNoiseCovCam: " << std::endl << measurementNoiseCovCam << std::endl << std::endl;
-    std::cout << "measurementNoiseCovImu: " << std::endl << measurementNoiseCovImu << std::endl << std::endl;
     
     Eigen::MatrixXd measurementCam(measurementSize, 1);
     measurementCam.setZero();
