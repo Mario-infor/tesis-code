@@ -13,7 +13,6 @@
 #include <readWriteData.h>
 #include <RingBuffer.h>
 
-std::string dirRotationsFolder = "/home/nvidia/Mario/tesis-code/Test/data/rotations/";
 std::string dirPointsFolder = "/home/nvidia/Mario/tesis-code/Test/data/points_data/";
 
 std::string dirCameraFolder = "/home/nvidia/Mario/tesis-code/Test/data/dynamic_data/camera/";
@@ -56,23 +55,6 @@ void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
             IMUDataFile << tempIMU.gravVect.x << std::endl;
             IMUDataFile << tempIMU.gravVect.y << std::endl;
             IMUDataFile << tempIMU.gravVect.z << std::endl;
-        }
-    }
-}
-
-void IMUDataWriteTestAxis(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
-{
-    std::string tempName = dirIMUFolder + "IMUData";
-    std::ofstream IMUDataFile(tempName, std::ios::out);
-
-    if (IMUDataFile.is_open())
-    {
-        while (!imuDataJetsonBuffer.QueueIsEmpty())
-        {
-            ImuInputJetson tempIMU;
-            imuDataJetsonBuffer.Dequeue(tempIMU);
-
-            IMUDataFile << tempIMU.accVect.x << "  " << tempIMU.accVect.y << "  " << tempIMU.accVect.z << std::endl;
         }
     }
 }
@@ -186,81 +168,6 @@ std::vector<CameraInput> readDataCamera()
     std::cout << "Exit readDataCamera method."<< std::endl;
 
     return cameraData;
-}
-
-void cameraRotationSlerpDataWrite(std::vector<CameraInterpolatedData> cameraSlerpRotationsVector)
-{
-    std::string tempName1 = dirRotationsFolder + "slerpRotations23.csv";
-    std::string tempName2 = dirRotationsFolder + "slerpRotations30.csv";
-    std::string tempName3 = dirRotationsFolder + "slerpRotations45.csv";
-    std::string tempName4 = dirRotationsFolder + "slerpRotations80.csv";
-
-    std::ofstream cameraRotationsFile1(tempName1, std::ios::out);
-    std::ofstream cameraRotationsFile2(tempName2, std::ios::out);
-    std::ofstream cameraRotationsFile3(tempName3, std::ios::out);
-    std::ofstream cameraRotationsFile4(tempName4, std::ios::out);
-
-    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
-    {
-        for (size_t i = 0; i < cameraSlerpRotationsVector.size(); i++)
-        {
-            for (size_t j = 0; j < cameraSlerpRotationsVector[i].frameMarkersData.markerIds.size(); j++)
-            {
-                int originalOrNot = cameraSlerpRotationsVector[i].originalOrNot;
-                cv::Vec3d tempRvec = cameraSlerpRotationsVector[i].frameMarkersData.rvecs[j];
-                int tempMarkerId = cameraSlerpRotationsVector[i].frameMarkersData.markerIds[j];
-
-                if (tempMarkerId == 23)
-                    cameraRotationsFile1 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 30)
-                    cameraRotationsFile2 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 45)
-                    cameraRotationsFile3 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 80)
-                    cameraRotationsFile4 << originalOrNot << "," << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-            }
-        }
-    }
-}
-
-void cameraRotationSlerpDataWrite(std::vector<FrameMarkersData> cameraRotationsVector)
-{
-    std::string tempName1 = dirRotationsFolder + "rotations23.csv";
-    std::string tempName2 = dirRotationsFolder + "rotations30.csv";
-    std::string tempName3 = dirRotationsFolder + "rotations45.csv";
-    std::string tempName4 = dirRotationsFolder + "rotations80.csv";
-
-    std::ofstream cameraRotationsFile1(tempName1, std::ios::out);
-    std::ofstream cameraRotationsFile2(tempName2, std::ios::out);
-    std::ofstream cameraRotationsFile3(tempName3, std::ios::out);
-    std::ofstream cameraRotationsFile4(tempName4, std::ios::out);
-
-    if (cameraRotationsFile1.is_open() && cameraRotationsFile2.is_open() && cameraRotationsFile3.is_open() && cameraRotationsFile4.is_open())
-    {
-        for (size_t i = 0; i < cameraRotationsVector.size(); i++)
-        {
-            for (size_t j = 0; j < cameraRotationsVector[i].markerIds.size(); j++)
-            {
-                cv::Vec3d tempRvec = cameraRotationsVector[i].rvecs[j];
-                int tempMarkerId = cameraRotationsVector[i].markerIds[j];
-
-                if (tempMarkerId == 23)
-                    cameraRotationsFile1 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 30)
-                    cameraRotationsFile2 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 45)
-                    cameraRotationsFile3 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-
-                else if (tempMarkerId == 80)
-                    cameraRotationsFile4 << tempRvec[0] << "," << tempRvec[1] << "," << tempRvec[2] << std::endl;
-            }
-        }
-    }
 }
 
 void pointsDataWrite(

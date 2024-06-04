@@ -20,11 +20,11 @@
 //#define THRESHOLD_IMU_GYRO_MAX 0.07
 //#define THRESHOLD_IMU_GYRO_MIN -0.05
 
+bool doneCalibrating = false;
+
 // Global variables that need to be accessed from different threads or methods.
 std::chrono::time_point<std::chrono::steady_clock> timeCameraStart;
 std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
-
-bool doneCalibrating = false;
 
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread();

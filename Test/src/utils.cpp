@@ -96,35 +96,12 @@ void printIMUData()
     win = initscr();
     clearok(win, TRUE);
 
-    float maxX = 0.0;
-    float maxY = 0.0;
-    float maxZ = 0.0;
-
     while (true)
     {
         sensors.readAll();
         sensors.readAxisRemap();
         wmove(win, 5, 2);
 
-        /* float tempMaxX = sensors.accelVect.vi[0] * sensors.Scale;
-        float tempMaxY = sensors.accelVect.vi[1] * sensors.Scale;
-        float tempMaxZ = sensors.accelVect.vi[2] * sensors.Scale;
-
-        if (tempMaxX > maxX)
-            maxX = tempMaxX;
-
-        if (tempMaxY > maxY)
-            maxY = tempMaxY;
-
-        if (tempMaxZ > maxZ)
-            maxZ = tempMaxZ;
-
-        snprintf(buff, 511, "Acc = {X=%f, Y=%f, Z=%f}", maxX, maxY, maxZ); */
-
-        /* snprintf(buff, 79, "EULER=[%07.5lf, %07.5lf, %07.3lf]",
-                 sensors.eOrientation.vi[0] * sensors.Scale * MATH_RAD_TO_DEGREE,
-                 sensors.eOrientation.vi[1] * sensors.Scale * MATH_RAD_TO_DEGREE,
-                 sensors.eOrientation.vi[2] * sensors.Scale * MATH_RAD_TO_DEGREE); */
         wmove(win, 5, 2);
         snprintf(buff, 512, "Gravity=[%07.5lf, %07.5lf, %07.3lf]",
                  sensors.gravVect.vi[0] * 0.01,
