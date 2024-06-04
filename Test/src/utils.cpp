@@ -9,6 +9,7 @@
 #include <curses.h>
 #include <iterator>
 #include <cmath>
+#include <readWriteData.h>
 
 // Convert rotation vector to quaternion.
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect)
@@ -681,6 +682,10 @@ void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName)
     {
         Eigen::Quaterniond q(KF.statePre.at<float>(3), KF.statePre.at<float>(4), KF.statePre.at<float>(5), KF.statePre.at<float>(6));
         q.normalize();
+
+        if (q.w() < 0)
+            q.coeffs() *= -1;
+        
         KF.statePre.at<float>(3) = q.w();
         KF.statePre.at<float>(4) = q.x();
         KF.statePre.at<float>(5) = q.y();
@@ -690,11 +695,23 @@ void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName)
     {
         Eigen::Quaterniond q(KF.statePost.at<float>(3), KF.statePost.at<float>(4), KF.statePost.at<float>(5), KF.statePost.at<float>(6));
         q.normalize();
+
+        if (q.w() < 0)
+            q.coeffs() *= -1;
+
         KF.statePost.at<float>(3) = q.w();
         KF.statePost.at<float>(4) = q.x();
         KF.statePost.at<float>(5) = q.y();
         KF.statePost.at<float>(6) = q.z();
     }
+}
+
+void fixQuatEigen(Eigen::Quaterniond &q)
+{
+    q.normalize();
+
+    if (q.w() < 0)
+        q.coeffs() *= -1;
 }
 
 int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId)
@@ -740,4 +757,38 @@ void applyIIRFilterToAccAndGyro(
 {
     accFiltered = ALPHA_ACC * accFiltered + (1 - ALPHA_ACC) * accReading;
     gyroFiltered = ALPHA_GYRO * gyroFiltered + (1 - ALPHA_GYRO) * gyroReading;
+}
+
+void calculateBiasAccAndGyro(Eigen::Vector3d &accBiasVect, Eigen::Vector3d &gyroBiasVect)
+{
+    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
+
+    Eigen::Vector3d gyro;
+    Eigen::Vector3d acc;
+
+    gyro.setZero();
+    acc.setZero();
+
+    for(size_t i = 0; i < imuReadVector.size(); i++)
+    {
+        ImuInputJetson tempImuData = imuReadVector.at(i);
+
+        gyro = Eigen::Vector3d{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
+        acc = Eigen::Vector3d{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+        
+        accBiasVect += acc;
+        gyroBiasVect += gyro;
+    }
+
+    accBiasVect /= imuReadVector.size();
+    gyroBiasVect /= imuReadVector.size();
+}
+
+Eigen::Vector3d multiplyVectorByG(Eigen::Matrix4d G, Eigen::Vector3d v)
+{
+    Eigen::Vector4d v4;
+    v4 << v, 1;
+    v4 = G * v4;
+
+    return v4.block<3,1>(0,0);
 }

@@ -12,7 +12,7 @@
 #define	MATH_DEGREE_TO_RAD		(MATH_PI / 180.0) // Conversion from degrees to radians.
 #define	MATH_RAD_TO_DEGREE		(180.0 / MATH_PI) // Conversion from radians to degrees.
 #define ALPHA_ACC 0.7 // Alpha value for the accelerometer IIR.
-#define ALPHA_GYRO 0.3 // Alpha value for the gyroscope IIR.
+#define ALPHA_GYRO 0.6 // Alpha value for the gyroscope IIR.
 
 // Convert rotation vector to quaternion.
 glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect);
@@ -115,6 +115,8 @@ Eigen::Matrix4d invertG(Eigen::Matrix4d G);
 
 void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName);
 
+void fixQuatEigen(Eigen::Quaterniond &q);
+
 int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId);
 
 std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkersData firstFrameMarkersData, Eigen::Matrix4d Gcm, int indexBaseMarker);
@@ -124,5 +126,9 @@ void applyIIRFilterToAccAndGyro(
     Eigen::Vector3d gyroReading,
     Eigen::Vector3d &accFiltered,
     Eigen::Vector3d &gyroFiltered);
+
+void calculateBiasAccAndGyro(Eigen::Vector3d &accBiasVect, Eigen::Vector3d &gyroBiasVect);
+
+Eigen::Vector3d multiplyVectorByG(Eigen::Matrix4d G, Eigen::Vector3d v);
 
 #endif // UTILS_H

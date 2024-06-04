@@ -64,6 +64,8 @@ void updateTransitionMatrixFusionIMU(cv::KalmanFilter &KF, float deltaT, int sta
 
 void updateTransitionMatrixFusionCamera (cv::KalmanFilter &KF, float deltaT);
 
+void updateTransitionMatrixFusion(cv::KalmanFilter &KF, float deltaT, int stateSize, Eigen::Vector3d w);
+
 // Method to predict the next state of the imu data.
 void imuPreintegration(const float deltaT, const Eigen::Vector3d acc,
  const Eigen::Vector3d gyro, Eigen::Vector3d &deltaPos, Eigen::Vector3d &deltaVel,
