@@ -282,7 +282,7 @@ void gnuPrintImuPreintegration(
     fflush(output);
     fprintf(output, "e\n");
     
-    usleep(1000000/10);
+    usleep(1000000/5);
 }
 
 void gnuPrintImuCompareValues(
