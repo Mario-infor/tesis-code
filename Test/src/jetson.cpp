@@ -243,12 +243,6 @@ void runCameraAndIMUKalmanFilter()
     std::vector<Eigen::Quaterniond> vectorImuMeasurenments;
     std::vector<Eigen::VectorXd> vectorStates;
 
-    std::vector<Eigen::VectorXd> vectorImuAcc;
-    std::vector<Eigen::VectorXd> vectorIIRAcc;
-
-    std::vector<Eigen::VectorXd> vectorImuGyro;
-    std::vector<Eigen::VectorXd> vectorIIRGyro;
-
     std::vector<float> timeStamps;
 
     FILE *output;
@@ -395,14 +389,6 @@ void runCameraAndIMUKalmanFilter()
     
     gyro = gyro + gyroBias;
     acc = acc + accBias;
-
-    //applyIIRFilterToAccAndGyro(acc, gyro, accFiltered, gyroFiltered);
-
-    /*vectorImuGyro.push_back(gyro);
-    vectorIIRGyro.push_back(gyroFiltered);
-
-    vectorImuAcc.push_back(acc);
-    vectorIIRAcc.push_back(accFiltered);*/
 
     Eigen::Quaterniond imuQuat{
         tempImuData.rotQuat[0],
@@ -574,14 +560,6 @@ void runCameraAndIMUKalmanFilter()
 
                 gyro = gyro + gyroBias;
                 acc = acc + accBias;
-
-                //applyIIRFilterToAccAndGyro(acc, gyro, accFiltered, gyroFiltered);
-
-                /*vectorImuGyro.push_back(gyro);
-                vectorIIRGyro.push_back(gyroFiltered);
-
-                vectorImuAcc.push_back(acc);
-                vectorIIRAcc.push_back(accFiltered);*/
 
                 imuQuat = Eigen::Quaterniond{
                     tempImuData.rotQuat[0],
@@ -814,9 +792,6 @@ void runCameraAndIMUKalmanFilter()
         if (indexCamera == (int)cameraData.size() - 1)
         {
             //pointsDataWrite(vectorCamMeasurenments, vectorStates, timeStamps, "cameraVsKalman.csv");
-            //pointsDataWrite(vectorImuGyro, vectorIIRGyro, timeStamps, "imuGyroVsIIR.csv");
-            //pointsDataWrite(vectorImuAcc, vectorIIRAcc, timeStamps, "imuAccVsIIR.csv");
-
             //quatDataWrite(vectorImuMeasurenments, timeStamps, "imuQuats.csv");
             break;
         }
