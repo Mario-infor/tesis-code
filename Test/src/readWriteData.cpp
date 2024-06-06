@@ -206,3 +206,26 @@ void pointsDataWrite(
         }
     }
 }
+
+void quatDataWrite(
+    std::vector<Eigen::Quaterniond> vectorOfQuats,
+    std::vector<float> timeStamps,
+    std::string fileName)
+{
+    std::string tempNamePointsData = dirPointsFolder + fileName;
+
+    std::ofstream PointsFile(tempNamePointsData, std::ios::out);
+
+    if (PointsFile.is_open())
+    {
+        for (size_t i = 0; i < vectorOfQuats.size(); i++)
+        {
+            PointsFile << timeStamps.at(i) << ",";
+
+            PointsFile << vectorOfQuats.at(i).w() << ",";
+            PointsFile << vectorOfQuats.at(i).x() << ",";
+            PointsFile << vectorOfQuats.at(i).y() << ",";
+            PointsFile << vectorOfQuats.at(i).z() << std::endl;
+        }
+    }
+}

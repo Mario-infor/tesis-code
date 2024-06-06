@@ -96,6 +96,7 @@
         "splines": "cpp",
         "*.evaluator": "cpp",
         "*.traits": "cpp",
-        "dense": "cpp"
+        "dense": "cpp",
+        "*.expression": "cpp"
     }
 }
