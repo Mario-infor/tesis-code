@@ -1,0 +1,11 @@
+source ~/kalibr_workspace/devel/setup.bash
+
+roscore
+
+roslaunch jetson_csi_cam jetson_csi_cam.launch width:=800 height:=600
+
+roslaunch imu_bno055 imu.launch
+
+rostopic echo
+
+rostopic list
