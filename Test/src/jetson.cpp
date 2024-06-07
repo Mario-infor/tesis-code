@@ -326,27 +326,29 @@ void runCameraAndIMUKalmanFilter()
     initKalmanFilter(KF, stateSize);
 
     Eigen::Matrix4d Gci;
-    Gci << 
+    /*Gci << 
     -0.99787874, 0.05596833, -0.03324997, 0.09329806,
     0.03309321, -0.00372569, -0.99944533, 0.01431868,
     -0.05606116, -0.99842559, 0.00186561, -0.12008699,
-    0.0, 0.0, 0.0, 1.0;
+    0.0, 0.0, 0.0, 1.0;*/
 
-    /* Gci << 
+    Gci << 
     -0.99787874, 0.05596833, -0.03324997, 0.09329806,
     0.03309321, -0.00372569, -0.99944533, 0.01431868,
     -0.05606116, -0.99842559, 0.00186561, -0.06008699,
-    0.0, 0.0, 0.0, 1.0; */
+    0.0, 0.0, 0.0, 1.0;
 
     Eigen::Matrix4d Gmc;
     Eigen::Matrix4d oldGmc;
     Eigen::Matrix4d Gcm;
-    Eigen::Matrix4d Gi;
+    Eigen::Matrix4d Gwi;
     Eigen::Matrix4d Gmi;
     Eigen::Matrix4d Gci_inv;
     Eigen::Matrix4d Gcm_second;
     Eigen::Matrix4d Gmc_second;
     Eigen::Matrix4d Gmm_secondToBase;
+    Eigen::Matrix4d Gmw;
+    Eigen::Matrix4d Gmw_inv;
 
 
     Eigen::Matrix4d Gti; // Constant that converts IMU measurenment to IMU pos in camera world.
@@ -355,13 +357,15 @@ void runCameraAndIMUKalmanFilter()
     Gmc.setIdentity();
     oldGmc.setIdentity();
     Gcm.setIdentity();
-    Gi.setIdentity();
+    Gwi.setIdentity();
     Gmi.setIdentity();
     Gti.setIdentity();
     Gni.setIdentity();
     Gcm_second.setIdentity();
     Gmc_second.setIdentity();
     Gmm_secondToBase.setIdentity();
+    Gmw.setIdentity();
+    Gmw_inv.setIdentity();
 
     Gci_inv = invertG(Gci);
 
@@ -386,8 +390,8 @@ void runCameraAndIMUKalmanFilter()
     //accNoise = (accelerometer_noise_density / sqrt(deltaTImu)) * acc;
     //gyroNoise = (gyroscope_noise_density / sqrt(deltaTImu)) * gyro;
     
-    gyro = gyro + gyroBias;
-    acc = acc + accBias;
+    gyro = gyro - gyroBias;
+    acc = acc - accBias;
 
     Eigen::Quaterniond imuQuat{
         tempImuData.rotQuat[0],
@@ -479,7 +483,9 @@ void runCameraAndIMUKalmanFilter()
 
                     w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCamMeasurement);
 
-                    measurementCam.block<3,1>(0,0) = camT; // Traslation
+                    measurementCam(0) = camT.x();
+                    measurementCam(1) = camT.y();
+                    measurementCam(2) = camT.z();
                     measurementCam(3) = camQuat.w();
                     measurementCam(4) = camQuat.x();
                     measurementCam(5) = camQuat.y();
@@ -523,7 +529,7 @@ void runCameraAndIMUKalmanFilter()
                 resetGmi.block<3, 3>(0, 0) = stateRot;
                 resetGmi.block<3, 1>(0, 3) = statePos;
                 
-                Gmi = Gci * resetGmi;
+                Gwi = Gci * resetGmi * Gmw_inv;
                 
                 Eigen::Matrix4d stateGhi;
                 stateGhi << 
@@ -532,9 +538,10 @@ void runCameraAndIMUKalmanFilter()
                     -KF.statePost.at<float>(11),     KF.statePost.at<float>(10),     0,                               KF.statePost.at<float>(9),
                     0,0,0,0;
                 
-                Eigen::Matrix4d imuGhiWorld = Gci * stateGhi * Gci_inv;
+                Eigen::Matrix4d imuGhiMarker = Gci * stateGhi * Gci_inv;
+                Eigen::Matrix4d imuGhiWorld = invertG(Gwi) * imuGhiMarker * Gwi;
 
-                deltaPos = Eigen::Vector3d(Gmi.block<3, 1>(0, 3));
+                deltaPos = Eigen::Vector3d(Gwi.block<3, 1>(0, 3));
                 deltaVel = Eigen::Vector3d(imuGhiWorld.block<3, 1>(0, 3));
                 //firstImuRot = Gci.block<3, 3>(3, 3) * camRot * Gmi.block<3, 3>(0, 0);
 
@@ -557,8 +564,8 @@ void runCameraAndIMUKalmanFilter()
                 accBias = accBias + accelerometer_random_walk * sqrt(deltaTImu) * acc;
                 gyroBias = gyroBias + gyroscope_random_walk * sqrt(deltaTImu) * gyro;
 
-                gyro = gyro + gyroBias;
-                acc = acc + accBias;
+                gyro = gyro - gyroBias;
+                acc = acc - accBias;
 
                 imuQuat = Eigen::Quaterniond{
                     tempImuData.rotQuat[0],
@@ -573,36 +580,49 @@ void runCameraAndIMUKalmanFilter()
 
                 Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
 
-                Eigen::Matrix3d Rmi = invertG(Gmc).block<3, 3>(0, 0) * Gci_inv.block<3, 3>(0, 0) * imuRot;
+                //Eigen::Matrix3d Rmi = invertG(Gmc).block<3, 3>(0, 0) * Gci_inv.block<3, 3>(0, 0) * imuRot;
 
                 //Eigen::Matrix3d imuRotFromNewOrigen = imuRot * firstImuRot.transpose();
 
-                Eigen::Vector3d imuAccFromWorld = Rmi * acc;
+                Eigen::Vector3d imuAccFromWorld = imuRot.transpose() * acc;
 
                 float deltaTForIntegration = tempImuData.time - imuReadVector.at(indexImu - 1).time;
                 deltaTForIntegration /= 1000;
                 
                 imuPreintegration(deltaTForIntegration, imuAccFromWorld, deltaPos, deltaVel);
 
-                Eigen::Quaterniond imuQuatWorld(Rmi);
-                fixQuatEigen(imuQuatWorld);
+                Gwi.block<3, 3>(0, 0) = imuRot;
+                Gwi.block<3, 1>(0, 3) = deltaPos;
 
-                Eigen::Matrix3d wHat = getWHat(gyro);
-                Eigen::Matrix3d wHatWorld = Rmi.transpose() * wHat * Rmi;
+                Gmi = Gwi * Gmw;
 
-                measurementImu(0,0) = wHatWorld(2, 1);
-                measurementImu(1,0) = wHatWorld(0, 2);
-                measurementImu(2,0) = wHatWorld(1, 0);
-                measurementImu(3,0) = imuQuatWorld.w();
-                measurementImu(4,0) = imuQuatWorld.x();
-                measurementImu(5,0) = imuQuatWorld.y();
-                measurementImu(6,0) = imuQuatWorld.z();
-                measurementImu(7,0) = deltaVel[0];
-                measurementImu(8,0) = deltaVel[1];
-                measurementImu(9,0) = deltaVel[2];
-                measurementImu(10,0) = deltaPos[0];
-                measurementImu(11,0) = deltaPos[1];
-                measurementImu(12,0) = deltaPos[2];
+                Eigen::Matrix3d Rmi = Gmi.block<3, 3>(0, 0);
+                Eigen::Vector3d Tmi = Gmi.block<3, 1>(0, 3);
+
+                Eigen::Quaterniond imuQuatMarker(Rmi);
+                fixQuatEigen(imuQuatMarker);
+
+                Eigen::Matrix3d wHatWorld = getWHat(imuRot.transpose() * gyro);
+                Eigen::Matrix4d Ghi_wi;
+                Ghi_wi.setZero();
+                Ghi_wi.block<3, 3>(0, 0) = wHatWorld;
+                Ghi_wi.block<3, 1>(0, 3) = deltaVel;
+
+                Eigen::Matrix4d Ghi_mi = Gmw_inv * Ghi_wi * Gmw;
+
+                measurementImu(0) = Ghi_mi(2, 1);
+                measurementImu(1) = Ghi_mi(0, 2);
+                measurementImu(2) = Ghi_mi(1, 0);
+                measurementImu(3) = imuQuatMarker.w();
+                measurementImu(4) = imuQuatMarker.x();
+                measurementImu(5) = imuQuatMarker.y();
+                measurementImu(6) = imuQuatMarker.z();
+                measurementImu(7) = Ghi_mi(0, 3);
+                measurementImu(8) = Ghi_mi(1, 3);
+                measurementImu(9) = Ghi_mi(2, 3);
+                measurementImu(10) = Tmi.x();
+                measurementImu(11) = Tmi.y();
+                measurementImu(12) = Tmi.z();
 
                 std::cout << "measurementImu: " << std::endl <<  measurementImu << std::endl << std::endl;
 
@@ -705,34 +725,49 @@ void runCameraAndIMUKalmanFilter()
             deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
             deltaTImu /= 1000;
 
+            Gmi = Gci * Gmc;
+
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
 
-            Eigen::Matrix3d Rmi = invertG(Gmc).block<3, 3>(0, 0) * Gci_inv.block<3, 3>(0, 0) * imuRot;
+            //Eigen::Matrix3d Rmi = invertG(Gmc).block<3, 3>(0, 0) * Gci_inv.block<3, 3>(0, 0) * imuRot;
+            Eigen::Matrix3d Rmi = Gmi.block<3, 3>(0, 0);
+            Eigen::Vector3d Tmi = Gmi.block<3, 1>(0, 3);
             //firstImuRot = Rmi;
 
-            Eigen::Vector3d imuAccFromWorld = Rmi * acc;
+            Eigen::Vector3d imuAccFromWorld = imuRot.transpose() * acc;
 
             imuPreintegration(deltaTImu, imuAccFromWorld, deltaPos, deltaVel);
 
-            Eigen::Quaterniond imuQuatWorld(Rmi);
-            fixQuatEigen(imuQuatWorld);
+            Gwi.block<3, 3>(0, 0) = imuRot;
+            Gwi.block<3, 1>(0, 3) = deltaPos;
 
-            Eigen::Matrix3d wHat = getWHat(gyro);
-            Eigen::Matrix3d wHatWorld = Rmi.transpose() * wHat * Rmi;
+            Gmw = invertG(Gwi) * Gci * Gmc;
+            Gmw_inv = invertG(Gmw);
 
-            measurementImu(0,0) = wHatWorld(2, 1);
-            measurementImu(1,0) = wHatWorld(0, 2);
-            measurementImu(2,0) = wHatWorld(1, 0);
-            measurementImu(3,0) = imuQuatWorld.w();
-            measurementImu(4,0) = imuQuatWorld.x();
-            measurementImu(5,0) = imuQuatWorld.y();
-            measurementImu(6,0) = imuQuatWorld.z();
-            measurementImu(7,0) = deltaVel[0];
-            measurementImu(8,0) = deltaVel[1];
-            measurementImu(9,0) = deltaVel[2];
-            measurementImu(10,0) = deltaPos[0];
-            measurementImu(11,0) = deltaPos[1];
-            measurementImu(12,0) = deltaPos[2];
+            Eigen::Quaterniond imuQuatMarker(Rmi);
+            fixQuatEigen(imuQuatMarker);
+
+            Eigen::Matrix3d wHatWorld = getWHat(imuRot.transpose() * gyro);
+            Eigen::Matrix4d Ghi_wi;
+            Ghi_wi.setZero();
+            Ghi_wi.block<3, 3>(0, 0) = wHatWorld;
+            Ghi_wi.block<3, 1>(0, 3) = deltaVel;
+
+            Eigen::Matrix4d Ghi_mi = Gmw_inv * Ghi_wi * Gmw;
+
+            measurementImu(0) = Ghi_mi(2, 1);
+            measurementImu(1) = Ghi_mi(0, 2);
+            measurementImu(2) = Ghi_mi(1, 0);
+            measurementImu(3) = imuQuatMarker.w();
+            measurementImu(4) = imuQuatMarker.x();
+            measurementImu(5) = imuQuatMarker.y();
+            measurementImu(6) = imuQuatMarker.z();
+            measurementImu(7) = Ghi_mi(0, 3);
+            measurementImu(8) = Ghi_mi(1, 3);
+            measurementImu(9) = Ghi_mi(2, 3);
+            measurementImu(10) = Tmi.x();
+            measurementImu(11) = Tmi.y();
+            measurementImu(12) = Tmi.z();
 
             oldDeltaTImu = tempImuData.time;
             
