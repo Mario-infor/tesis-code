@@ -289,8 +289,6 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Vector3d accNoise{0, 0, 0};
     Eigen::Vector3d gyroNoise{0, 0, 0};
 
-
-
     bool isCameraNext = true;
     bool lastOneWasCamera = true;
     bool firstRun = true;
