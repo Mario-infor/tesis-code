@@ -802,8 +802,8 @@ void runCameraAndIMUKalmanFilter()
             vectorOfMarkers.erase(vectorOfMarkers.begin());
         }*/
 
-        //vectorOfPointsOne.push_back(PosOriginal);
-        //vectorOfPointsTwo.push_back(PosKF);
+        vectorOfPointsOne.push_back(PosOriginal);
+        vectorOfPointsTwo.push_back(PosKF);
         //vectorOfMarkers.push_back(PosKFPre);
         
         if(lastOneWasCamera)
@@ -811,10 +811,10 @@ void runCameraAndIMUKalmanFilter()
         else
             timeStamps.push_back(oldDeltaTImu);
 
-        vectorOfPointsOne.push_back(printPosError);
-        vectorOfPointsTwo.push_back(Eigen::Vector3d{0,0,0});
+        //vectorOfPointsOne.push_back(printPosError);
+        //vectorOfPointsTwo.push_back(Eigen::Vector3d{0,0,0});
         
-        //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
+        gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
 
         vectorCamMeasurenments.push_back(measurementCam);
         vectorStates.push_back(convertOpencvMatToEigenMat(KF.statePost));
