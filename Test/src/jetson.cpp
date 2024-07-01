@@ -381,6 +381,7 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
 
     deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
+    deltaTImu /= 1000;
 
     accBias = accBias + accelerometer_random_walk * sqrt(deltaTImu) * acc;
     gyroBias = gyroBias + gyroscope_random_walk * sqrt(deltaTImu) * gyro;
@@ -720,8 +721,8 @@ void runCameraAndIMUKalmanFilter()
             oldGmc = Gmc;
             oldCamLinearSpeed = Eigen::Vector3d{ KF.statePost.at<float>(7),  KF.statePost.at<float>(8),  KF.statePost.at<float>(9)};
             
-            deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
-            deltaTImu /= 1000;
+            //deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
+            //deltaTImu /= 1000;
 
             Gmi = Gci * Gmc;
 
@@ -814,7 +815,7 @@ void runCameraAndIMUKalmanFilter()
         //vectorOfPointsOne.push_back(printPosError);
         //vectorOfPointsTwo.push_back(Eigen::Vector3d{0,0,0});
         
-        gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
+        //gnuPrintImuPreintegration(output, vectorOfPointsOne, vectorOfPointsTwo, vectorOfMarkers);
 
         vectorCamMeasurenments.push_back(measurementCam);
         vectorStates.push_back(convertOpencvMatToEigenMat(KF.statePost));
