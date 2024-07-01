@@ -544,6 +544,9 @@ void runCameraAndIMUKalmanFilter()
                 deltaVel = Eigen::Vector3d(imuGhiWorld.block<3, 1>(0, 3));
                 //firstImuRot = Gci.block<3, 3>(3, 3) * camRot * Gmi.block<3, 3>(0, 0);
 
+                accBias.setZero();
+                gyroBias.setZero();
+
                 lastOneWasCamera = true;                                  
             }
             else
