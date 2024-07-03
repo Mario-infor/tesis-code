@@ -4,7 +4,11 @@
 #include <opencv2/opencv.hpp>
 #include <Eigen/Dense>
 
-// Struct to store information about each frame saved.
+/**
+ * @brief Struct to store information about each camera frame saved. It stores the index, time and frame of a 
+ * measurement from the camera. It also overwrites the = operator to make it easier to make a copy of the struct
+ * if necessary.
+*/
 struct CameraInput
 {
     int index;
@@ -23,7 +27,10 @@ struct CameraInput
     }
 };
 
-// Struct to store information about each IMU data saved (Jetson Board).
+/**
+ * @brief Struct to store information about each IMU measurement saved. It stores the index, time, gyro, euler, quaternion,
+ * acceleration and gravity data from one IMU measurement. 
+*/
 struct ImuInputJetson
 {
     int index;
@@ -35,7 +42,11 @@ struct ImuInputJetson
     Eigen::Vector3d gravVect;
 };
 
-// Struct to store a list of rvects and tvects.
+/**
+ * @brief Struct to store information about each rotation and traslation from all markes detected on one image frame.
+ * It stores the marker ids, rotation vectors, traslation vectors and quaternion vectors from all markers detected on
+ * one frame. 
+*/
 struct FrameMarkersData
 {
     std::vector<int> markerIds;
@@ -44,13 +55,10 @@ struct FrameMarkersData
     std::vector<cv::Vec4d> qvecs;
 };
 
-struct CameraInterpolatedData
-{
-    int originalOrNot; // 0 = original, 1 = interpolated.
-    CameraInput frame;
-    FrameMarkersData frameMarkersData;
-};
-
+/**
+ * @brief Struct to store information about the transformation between two markers. It stores the base marker id, secundary
+ * marker id and the transformation matrix from the secundary marker to the base marker. 
+*/
 struct TransformBetweenMarkers
 {
     int baseMarkerId;
