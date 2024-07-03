@@ -132,52 +132,6 @@ int getImuStartingIndexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
     return imuIndex;
 }
 
-void gnuPrintImuPreintegration(
-    FILE *output,
-    std::vector<Eigen::Vector3d> vectorOfPointsOne,
-    std::vector<Eigen::Vector3d> vectorOfPointsTwo,
-    std::vector<Eigen::Vector3d> vectorOfMarkers)
-{
-    fprintf(output, "set title \"IMU Preintegration\"\n");
-    fprintf(output, "set xlabel \"x\"\n");
-    fprintf(output, "set ylabel \"y\"\n");
-    fprintf(output, "set zlabel \"z\"\n");
-    fprintf(output, "set ticslevel 3.\n");
-    //fprintf(output, "set xrange [-1.0:1.0]\n");
-    //fprintf(output, "set yrange [-1.0:1.0]\n");
-    //fprintf(output, "set zrange [0.0:0.05]\n");
-
-    fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Z', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'X', '-' with points pointtype 7 ps 1 lc rgb 'black' title 'Marker'\n");
-    
-    Eigen::Vector3d tempPoint;
-
-    for (size_t i = 0; i < vectorOfPointsOne.size(); i++)
-    {
-        tempPoint = vectorOfPointsOne.at(i);
-        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
-    }
-    fflush(output);
-    fprintf(output, "e\n");
-    
-    for (size_t i = 0; i < vectorOfPointsTwo.size(); i++)
-    {
-        tempPoint = vectorOfPointsTwo.at(i);
-        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
-    }
-    fflush(output);
-    fprintf(output, "e\n");
-
-    for (size_t i = 0; i < vectorOfMarkers.size(); i++)
-    {
-        tempPoint = vectorOfMarkers.at(i);
-        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
-    }
-    fflush(output);
-    fprintf(output, "e\n");
-    
-    usleep(1000000/5);
-}
-
 Eigen::Quaterniond normalizeQuaternion(Eigen::Quaterniond quat)
 {
     Eigen::Quaterniond temp(quat);
@@ -429,10 +383,7 @@ void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName)
     if(stateName == "pre")
     {
         Eigen::Quaterniond q(KF.statePre.at<float>(3), KF.statePre.at<float>(4), KF.statePre.at<float>(5), KF.statePre.at<float>(6));
-        q.normalize();
-
-        if (q.w() < 0)
-            q.coeffs() *= -1;
+        fixQuatEigen(q);
         
         KF.statePre.at<float>(3) = q.w();
         KF.statePre.at<float>(4) = q.x();
@@ -442,10 +393,7 @@ void fixStateQuaternion(cv::KalmanFilter &KF, std::string stateName)
     else if (stateName == "post")
     {
         Eigen::Quaterniond q(KF.statePost.at<float>(3), KF.statePost.at<float>(4), KF.statePost.at<float>(5), KF.statePost.at<float>(6));
-        q.normalize();
-
-        if (q.w() < 0)
-            q.coeffs() *= -1;
+        fixQuatEigen(q);
 
         KF.statePost.at<float>(3) = q.w();
         KF.statePost.at<float>(4) = q.x();
@@ -495,41 +443,6 @@ std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkers
         }
     }
     return transforms;
-}
-
-void applyIIRFilterToAccAndGyro(
-    Eigen::Vector3d accReading,
-    Eigen::Vector3d gyroReading,
-    Eigen::Vector3d &accFiltered,
-    Eigen::Vector3d &gyroFiltered)
-{
-    accFiltered = ALPHA_ACC * accFiltered + (1 - ALPHA_ACC) * accReading;
-    gyroFiltered = ALPHA_GYRO * gyroFiltered + (1 - ALPHA_GYRO) * gyroReading;
-}
-
-void calculateBiasAccAndGyro(Eigen::Vector3d &accBiasVect, Eigen::Vector3d &gyroBiasVect)
-{
-    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
-
-    Eigen::Vector3d gyro;
-    Eigen::Vector3d acc;
-
-    gyro.setZero();
-    acc.setZero();
-
-    for(size_t i = 0; i < imuReadVector.size(); i++)
-    {
-        ImuInputJetson tempImuData = imuReadVector.at(i);
-
-        gyro = Eigen::Vector3d{tempImuData.gyroVect.x(), tempImuData.gyroVect.y(), tempImuData.gyroVect.z()};
-        acc = Eigen::Vector3d{tempImuData.accVect.x(), tempImuData.accVect.y(), tempImuData.accVect.z()};
-        
-        accBiasVect += acc;
-        gyroBiasVect += gyro;
-    }
-
-    accBiasVect /= imuReadVector.size();
-    gyroBiasVect /= imuReadVector.size();
 }
 
 Eigen::Vector3d multiplyVectorByG(Eigen::Matrix4d G, Eigen::Vector3d v)
@@ -732,4 +645,85 @@ std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(
     }
 
     return frameMarkersDataVector;
+}
+
+void gnuPrintImuPreintegration(
+    FILE *output,
+    std::vector<Eigen::Vector3d> vectorOfPointsOne,
+    std::vector<Eigen::Vector3d> vectorOfPointsTwo,
+    std::vector<Eigen::Vector3d> vectorOfMarkers)
+{
+    fprintf(output, "set title \"IMU Preintegration\"\n");
+    fprintf(output, "set xlabel \"x\"\n");
+    fprintf(output, "set ylabel \"y\"\n");
+    fprintf(output, "set zlabel \"z\"\n");
+    fprintf(output, "set ticslevel 3.\n");
+    //fprintf(output, "set xrange [-1.0:1.0]\n");
+    //fprintf(output, "set yrange [-1.0:1.0]\n");
+    //fprintf(output, "set zrange [0.0:0.05]\n");
+
+    fprintf(output, "splot '-' with points pointtype 7 ps 1 lc rgb 'blue' title 'Z', '-' with points pointtype 7 ps 1 lc rgb 'red' title 'X', '-' with points pointtype 7 ps 1 lc rgb 'black' title 'Marker'\n");
+    
+    Eigen::Vector3d tempPoint;
+
+    for (size_t i = 0; i < vectorOfPointsOne.size(); i++)
+    {
+        tempPoint = vectorOfPointsOne.at(i);
+        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
+    
+    for (size_t i = 0; i < vectorOfPointsTwo.size(); i++)
+    {
+        tempPoint = vectorOfPointsTwo.at(i);
+        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
+
+    for (size_t i = 0; i < vectorOfMarkers.size(); i++)
+    {
+        tempPoint = vectorOfMarkers.at(i);
+        fprintf(output, "%g %g %g\n", tempPoint[0], tempPoint[1], tempPoint[2]);
+    }
+    fflush(output);
+    fprintf(output, "e\n");
+    
+    usleep(1000000/5);
+}
+
+void applyIIRFilterToAccAndGyro(
+    Eigen::Vector3d accReading,
+    Eigen::Vector3d gyroReading,
+    Eigen::Vector3d &accFiltered,
+    Eigen::Vector3d &gyroFiltered)
+{
+    accFiltered = ALPHA_ACC * accFiltered + (1 - ALPHA_ACC) * accReading;
+    gyroFiltered = ALPHA_GYRO * gyroFiltered + (1 - ALPHA_GYRO) * gyroReading;
+}
+
+void calculateBiasAccAndGyro(Eigen::Vector3d &accBiasVect, Eigen::Vector3d &gyroBiasVect)
+{
+    std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
+
+    Eigen::Vector3d gyro;
+    Eigen::Vector3d acc;
+
+    gyro.setZero();
+    acc.setZero();
+
+    for(size_t i = 0; i < imuReadVector.size(); i++)
+    {
+        ImuInputJetson tempImuData = imuReadVector.at(i);
+
+        gyro = Eigen::Vector3d{tempImuData.gyroVect.x(), tempImuData.gyroVect.y(), tempImuData.gyroVect.z()};
+        acc = Eigen::Vector3d{tempImuData.accVect.x(), tempImuData.accVect.y(), tempImuData.accVect.z()};
+        
+        accBiasVect += acc;
+        gyroBiasVect += gyro;
+    }
+
+    accBiasVect /= imuReadVector.size();
+    gyroBiasVect /= imuReadVector.size();
 }
