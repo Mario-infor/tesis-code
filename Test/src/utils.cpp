@@ -719,7 +719,7 @@ std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkers
             transform.baseMarkerId = baseMarkerId;
             transform.secundaryMarkerId = firstFrameMarkersData.markerIds[i];
             Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i);            
-            transform.G = invertG(gCamToMarker) * Gcm;
+            transform.G = Gcm * invertG(gCamToMarker);
             transforms.push_back(transform);
         }
     }

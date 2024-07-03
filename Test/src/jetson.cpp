@@ -266,7 +266,7 @@ void runCameraAndIMUKalmanFilter()
     int cameraIgnoredTimes = 0;
     int indexCamera = 0;
     int indexImu = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
-    size_t ites = imuReadVector.size() + cameraData.size();
+    size_t ites = cameraData.size();
 
     float deltaTCam = -1;
     float oldDeltaTCam = 0;
@@ -324,17 +324,23 @@ void runCameraAndIMUKalmanFilter()
     initKalmanFilter(KF, stateSize);
 
     Eigen::Matrix4d Gci;
-    /*Gci << 
-    -0.99787874, 0.05596833, -0.03324997, 0.09329806,
-    0.03309321, -0.00372569, -0.99944533, 0.01431868,
-    -0.05606116, -0.99842559, 0.00186561, -0.12008699,
-    0.0, 0.0, 0.0, 1.0;*/
-
     Gci << 
     -0.99787874, 0.05596833, -0.03324997, 0.09329806,
     0.03309321, -0.00372569, -0.99944533, 0.01431868,
-    -0.05606116, -0.99842559, 0.00186561, -0.06008699,
+    -0.05606116, -0.99842559, 0.00186561, -0.12008699,
     0.0, 0.0, 0.0, 1.0;
+
+    /*Gci <<
+    -0.99787874, 0.03309321, -0.05606116, 0.08589408,
+    0.05596833, -0.00372569, -0.99842559, -0.12506631,
+    -0.03324997, -0.99944533, 0.00186561, 0.01763694,
+    0.0, 0.0, 0.0, 1.0;*/
+
+    /*Gci << 
+    -0.99787874, 0.05596833, -0.03324997, 0.09329806,
+    0.03309321, -0.00372569, -0.99944533, 0.01431868,
+    -0.05606116, -0.99842559, 0.00186561, -0.06008699,
+    0.0, 0.0, 0.0, 1.0;*/
 
     Eigen::Matrix4d Gmc;
     Eigen::Matrix4d oldGmc;
@@ -403,9 +409,14 @@ void runCameraAndIMUKalmanFilter()
 
     fixQuatEigen(imuQuat);
 
-    for (size_t i = 0; i < ites; i++)
+    int index = 0;
+
+    while (indexCamera < ites)
     {
-        std::cout << "Index: " << i << std::endl;
+        std::cout << "Index: " << index << std::endl;
+        std::cout << "indexCamera: " << indexCamera << std::endl;
+        std::cout << "indexImu: " << indexImu << std::endl;
+
         if (!firstRun)
         {
             if (cameraData.at(indexCamera + 1).time == imuReadVector.at(indexImu + 1).time)
@@ -429,6 +440,10 @@ void runCameraAndIMUKalmanFilter()
             {
                 CameraInput tempCameraData = cameraData.at(indexCamera);
                 FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData, dictionary, cameraMatrix, distCoeffs);
+
+                drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
+                                     tempCameraData.frame, cameraMatrix, distCoeffs, "Camera Measurement");
+                cv::waitKey(33);
 
                 Eigen::Vector3d camT;
                 Eigen::Matrix3d camRot;
@@ -464,7 +479,7 @@ void runCameraAndIMUKalmanFilter()
                         {
                             if(vectorOfTransforms[k].secundaryMarkerId == frameMarkersData.markerIds[j])
                             {
-                                Gcm = tempG * vectorOfTransforms[k].G;
+                                Gcm = vectorOfTransforms[k].G * tempG;
 
                                 //Eigen::Vector3d markerPos = invertG(vectorOfTransforms[k].G).block<3, 1>(0, 3);
                                 //vectorOfMarkers.push_back(markerPos);
@@ -538,7 +553,10 @@ void runCameraAndIMUKalmanFilter()
                     0,0,0,0;
                 
                 Eigen::Matrix4d imuGhiMarker = Gci * stateGhi * Gci_inv;
-                Eigen::Matrix4d imuGhiWorld = invertG(Gwi) * imuGhiMarker * Gwi;
+                //Eigen::Matrix4d imuGhiWorld = invertG(Gwi) * imuGhiMarker * Gwi;
+
+                Eigen::Matrix4d imuGhiWorld = Gmw * imuGhiMarker * Gmw_inv;
+
 
                 deltaPos = Eigen::Vector3d(Gwi.block<3, 1>(0, 3));
                 deltaVel = Eigen::Vector3d(imuGhiWorld.block<3, 1>(0, 3));
@@ -831,6 +849,8 @@ void runCameraAndIMUKalmanFilter()
             quatDataWrite(vectorImuMeasurenments, timeStamps, "imuQuats.csv");
             break;
         }
+
+        index++;
     }
 
     float averageError = 0;
@@ -857,10 +877,10 @@ int main()
 
     if (ifCalibrateIMUOnly)
     {
-        //imuCalibration();
-        printIMUData();
+        imuCalibration();
+        //printIMUData();
     }
-    else if (runKalmanFilterBool)
+    if (runKalmanFilterBool)
     {
         runCameraAndIMUKalmanFilter();
     }
