@@ -269,26 +269,12 @@ void calculateHAndJacobian(
     float h1 = r00_gci*(r22_gci_inv*w1-r12_gci_inv*w2)+r01_gci*(r02_gci_inv*w2-r22_gci_inv*w0)+r02_gci*(r12_gci_inv*w0-r02_gci_inv*w1);
     float h2 = r10_gci*(r20_gci_inv*w1-r10_gci_inv*w2)+r11_gci*(r00_gci_inv*w2-r20_gci_inv*w0)+r12_gci*(r10_gci_inv*w0-r00_gci_inv*w1);
 
-    //float qoModule = fabs(q0);
-
-    /* float temp1 = (2*(q3_2+q0_2)-1)*r22_gci;
-    float temp2 = 2*(q2*q3-q0*q1)*r21_gci;
-    float temp3 = 2*(q1*q3+q0*q2)*r20_gci;
-    float temp4 = 2*(q2*q3+q0*q1)*r12_gci;
-    float temp5 = (2*(q2_2+q0_2)-1)*r11_gci;
-    float temp6 = 2*(q1*q2-q0*q3)*r10_gci;
-    float temp7 = 2*(q1*q3-q0*q2)*r02_gci;
-    float temp8 = 2*(q0*q3+q1*q2)*r01_gci;
-    float temp9 = (2*(q1_2+q0_2)-1)*r00_gci; */
-
     float temp10 = (2*(q3_2+q0_2)-1)*r22_gci+2*(q2*q3-q0*q1)*r21_gci+2*(q1*q3+q0*q2)*r20_gci+2*(q2*q3+q0*q1)*r12_gci+(2*(q2_2+q0_2)-1)*r11_gci+2*(q1*q2-q0*q3)*r10_gci+2*(q1*q3-q0*q2)*r02_gci+2*(q0*q3+q1*q2)*r01_gci+(2*(q1_2+q0_2)-1)*r00_gci+1;
 
     if(temp10 == 0)
     {
         temp10 = 0.001;
     }
-
-    //float h3 = sqrt(temp1+temp2+temp3+temp4+temp5+temp6+temp7+temp8+temp9+1)/2;
 
     float h3 = sqrt(temp10)/2;
     float h4 = (2*(q2*q3+q0*q1)*r22_gci+(2*(q2_2+q0_2)-1)*r21_gci+2*(q1*q2-q0*q3)*r20_gci-(2*(q3_2+q0_2)-1)*r12_gci-2*(q2*q3-q0*q1)*r11_gci-2*(q1*q3+q0*q2)*r10_gci)/(2*sqrt(temp10));
@@ -445,19 +431,10 @@ std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkers
     return transforms;
 }
 
-Eigen::Vector3d multiplyVectorByG(Eigen::Matrix4d G, Eigen::Vector3d v)
-{
-    Eigen::Vector4d v4;
-    v4 << v, 1;
-    v4 = G * v4;
-
-    return v4.block<3,1>(0,0);
-}
-
-
-
-
-///////////////////////// Functions that ar not used /////////////////////////
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
 
 // Convert quaternion to rotation vector.
 Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion)
@@ -726,4 +703,13 @@ void calculateBiasAccAndGyro(Eigen::Vector3d &accBiasVect, Eigen::Vector3d &gyro
 
     accBiasVect /= imuReadVector.size();
     gyroBiasVect /= imuReadVector.size();
+}
+
+Eigen::Vector3d multiplyVectorByG(Eigen::Matrix4d G, Eigen::Vector3d v)
+{
+    Eigen::Vector4d v4;
+    v4 << v, 1;
+    v4 = G * v4;
+
+    return v4.block<3,1>(0,0);
 }

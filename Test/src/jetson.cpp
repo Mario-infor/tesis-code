@@ -192,13 +192,13 @@ void updateTransitionMatrixFusion(cv::KalmanFilter &KF, float deltaT, int stateS
 {
     float dT2 = deltaT / 2;
 
-    float w1 = KF.statePost.at<float>(10);
+    /*float w1 = KF.statePost.at<float>(10);
     float w2 = KF.statePost.at<float>(11);
-    float w3 = KF.statePost.at<float>(12);
+    float w3 = KF.statePost.at<float>(12);*/
 
-    /*float w1 = w(0);
+    float w1 = w(0);
     float w2 = w(1);
-    float w3 = w(2);*/
+    float w3 = w(2);
     
     KF.transitionMatrix =
         (cv::Mat_<float>(stateSize, stateSize) << 
@@ -588,9 +588,11 @@ void runCameraAndIMUKalmanFilter()
 
                 Eigen::Matrix4d Ghi_mi = Gmw_inv * Ghi_wi * Gmw;
 
-                measurementImu(0) = Ghi_mi(2, 1);
-                measurementImu(1) = Ghi_mi(0, 2);
-                measurementImu(2) = Ghi_mi(1, 0);
+                Eigen::Vector3d w_mi{Ghi_mi(2, 1), Ghi_mi(0, 2), Ghi_mi(1, 0)};
+
+                measurementImu(0) = w_mi.x();
+                measurementImu(1) = w_mi.y();
+                measurementImu(2) = w_mi.z();
                 measurementImu(3) = imuQuatMarker.w();
                 measurementImu(4) = imuQuatMarker.x();
                 measurementImu(5) = imuQuatMarker.y();
@@ -620,10 +622,11 @@ void runCameraAndIMUKalmanFilter()
 
                 correctIMU_EKF(KF, measurementNoiseCovImu, measurementImu, h, H);
                 fixStateQuaternion(KF, "post");
+                
+                Eigen::Matrix4d Ghi_mc = Gci_inv * Ghi_mi * Gci; 
+                Eigen::Vector3d w_mc{Ghi_mc(2, 1), Ghi_mc(0, 2), Ghi_mc(1, 0)};   
 
-                Eigen::Vector3d gyroInCameraFrame = multiplyVectorByG(Gci_inv, gyro);                
-
-                updateTransitionMatrixFusion(KF, deltaTImu, stateSize, gyroInCameraFrame);
+                updateTransitionMatrixFusion(KF, deltaTImu, stateSize, w_mc);
 
                 predict(KF);
                 fixStateQuaternion(KF, "pre");
