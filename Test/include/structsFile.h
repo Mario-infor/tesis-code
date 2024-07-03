@@ -2,8 +2,6 @@
 #define __STRUCTSFILE__
 
 #include <opencv2/opencv.hpp>
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <Eigen/Dense>
 
 // Struct to store information about each frame saved.
@@ -30,11 +28,11 @@ struct ImuInputJetson
 {
     int index;
     int time;
-    glm::vec3 gyroVect;
-    glm::vec3 eulerVect;
-    glm::quat rotQuat;
-    glm::vec3 accVect;
-    glm::vec3 gravVect;
+    Eigen::Vector3d gyroVect;
+    Eigen::Vector3d eulerVect;
+    Eigen::Quaterniond rotQuat;
+    Eigen::Vector3d accVect;
+    Eigen::Vector3d gravVect;
 };
 
 // Struct to store a list of rvects and tvects.

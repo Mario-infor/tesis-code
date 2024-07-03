@@ -22,14 +22,6 @@
 #include <cameraInfo.h>
 #include <Eigen/Dense>
 
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/glm.hpp>
-#include <glm/gtx/spline.hpp>
-#include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/string_cast.hpp>
-
-using namespace Eigen;
-
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
 
@@ -114,13 +106,13 @@ void imuThreadJetson()
         imuInputJetson.index = index;
         imuInputJetson.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - timeIMUStart).count();
 
-        imuInputJetson.gyroVect = glm::vec3(sensors.gyroVect.vi[0] * 0.01, sensors.gyroVect.vi[1] * 0.01, sensors.gyroVect.vi[2] * 0.01);
-        imuInputJetson.eulerVect = glm::vec3(sensors.eOrientation.vi[0] * sensors.Scale, sensors.eOrientation.vi[1] * sensors.Scale, sensors.eOrientation.vi[2] * sensors.Scale);
-        imuInputJetson.rotQuat = glm::quat(sensors.qOrientation.vi[3] * sensors.Scale, sensors.qOrientation.vi[0] * sensors.Scale,
+        imuInputJetson.gyroVect = Eigen::Vector3d(sensors.gyroVect.vi[0] * 0.01, sensors.gyroVect.vi[1] * 0.01, sensors.gyroVect.vi[2] * 0.01);
+        imuInputJetson.eulerVect = Eigen::Vector3d(sensors.eOrientation.vi[0] * sensors.Scale, sensors.eOrientation.vi[1] * sensors.Scale, sensors.eOrientation.vi[2] * sensors.Scale);
+        imuInputJetson.rotQuat = Eigen::Quaterniond(sensors.qOrientation.vi[3] * sensors.Scale, sensors.qOrientation.vi[0] * sensors.Scale,
                                            sensors.qOrientation.vi[1] * sensors.Scale, sensors.qOrientation.vi[2] * sensors.Scale);
 
-        imuInputJetson.accVect = glm::vec3(sensors.accelVect.vi[0] * sensors.Scale, sensors.accelVect.vi[1] * sensors.Scale, sensors.accelVect.vi[2] * sensors.Scale);
-        imuInputJetson.gravVect = glm::vec3(sensors.gravVect.vi[0] * 0.01, sensors.gravVect.vi[1] * 0.01, sensors.gravVect.vi[2] * 0.01);
+        imuInputJetson.accVect = Eigen::Vector3d(sensors.accelVect.vi[0] * sensors.Scale, sensors.accelVect.vi[1] * sensors.Scale, sensors.accelVect.vi[2] * sensors.Scale);
+        imuInputJetson.gravVect = Eigen::Vector3d(sensors.gravVect.vi[0] * 0.01, sensors.gravVect.vi[1] * 0.01, sensors.gravVect.vi[2] * 0.01);
 
         imuDataJetsonBuffer.Queue(imuInputJetson);
         index++;
@@ -264,7 +256,7 @@ void runCameraAndIMUKalmanFilter()
     int stateSize = 13;
     int measurementSize = 13;
     int indexCamera = 0;
-    int indexImu = getImuStartingIdexBaseOnCamera(cameraData, imuReadVector);
+    int indexImu = getImuStartingIndexBaseOnCamera(cameraData, imuReadVector);
     int ites = cameraData.size();
 
     float deltaTCam = -1;
@@ -358,8 +350,8 @@ void runCameraAndIMUKalmanFilter()
     FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
          dictionary, cameraMatrix, distCoeffs);
 
-    Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
-    Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+    Eigen::Vector3d gyro{tempImuData.gyroVect.x(), tempImuData.gyroVect.y(), tempImuData.gyroVect.z()};
+    Eigen::Vector3d acc{tempImuData.accVect.x(), tempImuData.accVect.y(), tempImuData.accVect.z()};
 
     deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
     deltaTImu /= 1000;
@@ -374,10 +366,10 @@ void runCameraAndIMUKalmanFilter()
     acc = acc - accBias;
 
     Eigen::Quaterniond imuQuat{
-        tempImuData.rotQuat[0],
-        tempImuData.rotQuat[1],
-        tempImuData.rotQuat[2],
-        tempImuData.rotQuat[3]
+        tempImuData.rotQuat.w(),
+        tempImuData.rotQuat.x(),
+        tempImuData.rotQuat.y(),
+        tempImuData.rotQuat.z()
     };
 
     Eigen::Quaterniond originalQuat = imuQuat;
@@ -385,7 +377,7 @@ void runCameraAndIMUKalmanFilter()
 
     int index = 0;
 
-    while (indexCamera < ites)
+    while (indexCamera < ites-1)
     {
         std::cout << "Index: " << index << std::endl;
         std::cout << "indexCamera: " << indexCamera << std::endl;
@@ -517,12 +509,15 @@ void runCameraAndIMUKalmanFilter()
                 
                 Gwi = Gci * resetGmi * Gmw_inv;
                 
-                Eigen::Matrix4d stateGhi;
-                stateGhi << 
+                Eigen::Matrix4d stateGhi = getGhi(
+                    Eigen::Vector3d{KF.statePost.at<float>(10), KF.statePost.at<float>(11), KF.statePost.at<float>(12)},
+                    Eigen::Vector3d{KF.statePost.at<float>(7), KF.statePost.at<float>(8), KF.statePost.at<float>(9)}
+                );
+                /*stateGhi << 
                     0,                              -KF.statePost.at<float>(12),     KF.statePost.at<float>(11),      KF.statePost.at<float>(7),
                     KF.statePost.at<float>(12),     0,                              -KF.statePost.at<float>(10),     KF.statePost.at<float>(8),
                     -KF.statePost.at<float>(11),     KF.statePost.at<float>(10),     0,                               KF.statePost.at<float>(9),
-                    0,0,0,0;
+                    0,0,0,0;*/
                 
                 Eigen::Matrix4d imuGhiMarker = Gci * stateGhi * Gci_inv;
                 Eigen::Matrix4d imuGhiWorld = Gmw * imuGhiMarker * Gmw_inv;
@@ -546,8 +541,8 @@ void runCameraAndIMUKalmanFilter()
 
                 deltaTImu /= 1000;
 
-                Eigen::Vector3d gyro{tempImuData.gyroVect.x, tempImuData.gyroVect.y, tempImuData.gyroVect.z};
-                Eigen::Vector3d acc{tempImuData.accVect.x, tempImuData.accVect.y, tempImuData.accVect.z};
+                Eigen::Vector3d gyro{tempImuData.gyroVect.x(), tempImuData.gyroVect.y(), tempImuData.gyroVect.z()};
+                Eigen::Vector3d acc{tempImuData.accVect.x(), tempImuData.accVect.y(), tempImuData.accVect.z()};
                 
                 accBias = accBias + accelerometer_random_walk * sqrt(deltaTImu) * acc;
                 gyroBias = gyroBias + gyroscope_random_walk * sqrt(deltaTImu) * gyro;
@@ -556,10 +551,10 @@ void runCameraAndIMUKalmanFilter()
                 acc = acc - accBias;
 
                 imuQuat = Eigen::Quaterniond{
-                    tempImuData.rotQuat[0],
-                    tempImuData.rotQuat[1],
-                    tempImuData.rotQuat[2],
-                    tempImuData.rotQuat[3]
+                    tempImuData.rotQuat.w(),
+                    tempImuData.rotQuat.x(),
+                    tempImuData.rotQuat.y(),
+                    tempImuData.rotQuat.z()
                 };
                 originalQuat = imuQuat;
                 fixQuatEigen(imuQuat);
@@ -831,24 +826,24 @@ int main()
                     waddstr(win, buff);
 
                     wmove(win, 5, 2);
-                    snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroVect.x, imuDataJetson.gyroVect.y, imuDataJetson.gyroVect.z);
+                    snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroVect.x(), imuDataJetson.gyroVect.y(), imuDataJetson.gyroVect.z());
                     waddstr(win, buff);
 
                     wmove(win, 7, 2);
-                    snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerVect.x, imuDataJetson.eulerVect.y, imuDataJetson.eulerVect.z);
+                    snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerVect.x(), imuDataJetson.eulerVect.y(), imuDataJetson.eulerVect.z());
                     waddstr(win, buff);
 
                     wmove(win, 9, 2);
-                    snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w, imuDataJetson.rotQuat.x,
-                             imuDataJetson.rotQuat.y, imuDataJetson.rotQuat.z);
+                    snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w(), imuDataJetson.rotQuat.x(),
+                             imuDataJetson.rotQuat.y(), imuDataJetson.rotQuat.z());
                     waddstr(win, buff);
 
                     wmove(win, 11, 3);
-                    snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accVect.x, imuDataJetson.accVect.y, imuDataJetson.accVect.z);
+                    snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accVect.x(), imuDataJetson.accVect.y(), imuDataJetson.accVect.z());
                     waddstr(win, buff);
 
                     wmove(win, 13, 2);
-                    snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravVect.x, imuDataJetson.gravVect.y, imuDataJetson.gravVect.z);
+                    snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravVect.x(), imuDataJetson.gravVect.y(), imuDataJetson.gravVect.z());
                     waddstr(win, buff);
 
                     if (imuIndex != 0)

@@ -35,13 +35,11 @@ $(OBJS_DIR)/readWriteData.o: $(SRC_DIR)/readWriteData.cpp include/readWriteData.
 $(OBJS_DIR)/utils.o: $(SRC_DIR)/utils.cpp include/utils.h include/structsFile.h
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/utils.cpp
 
-$(OBJS_DIR)/interpolationUtils.o: $(SRC_DIR)/interpolationUtils.cpp include/interpolationUtils.h include/utils.h include/structsFile.h
-	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/interpolationUtils.cpp
 
 $(OBJS_DIR)/readShow.o: $(SRC_DIR)/readShow.cpp include/readShow.h include/cameraInfo.h
 	$(CC) $(CPPFLAGS) $(JETSON_CFLAGS) -c -o $@ $(SRC_DIR)/readShow.cpp
 
-lib/libMario.a: $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o $(OBJS_DIR)/interpolationUtils.o
+lib/libMario.a: $(OBJS_DIR)/readWriteData.o $(OBJS_DIR)/utils.o
 	ar rcs $@ $^	
 	ranlib $@
 

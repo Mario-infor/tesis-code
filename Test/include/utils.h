@@ -3,7 +3,6 @@
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/aruco.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <structsFile.h>
 #include <Eigen/Dense>
 
@@ -15,10 +14,10 @@
 #define ALPHA_GYRO 0.001 // Alpha value for the gyroscope IIR.
 
 // Convert rotation vector to quaternion.
-glm::quat convertOpencvRotVectToQuat(cv::Vec3d rotVect);
+Eigen::Quaterniond convertOpencvRotVectToQuat(cv::Vec3d rotVect);
 
-// Convert quaternion to rotation vector using glm and opencv.
-cv::Vec3d QuatToRotVect(glm::quat quaternion);
+// Convert quaternion to rotation vector using Eigen and opencv.
+cv::Vec3d QuatToRotVect(Eigen::Quaterniond quaternion);
 
 // Convert quaternion to rotation vector using Eigen.
 Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion);
@@ -58,7 +57,7 @@ Eigen::Matrix3d getWHat(const Eigen::Vector3d v);
 
 Eigen::Matrix4d getGhi(const Eigen::Vector3d w, const Eigen::Vector3d v);
 
-int getImuStartingIdexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
+int getImuStartingIndexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
  std::vector<ImuInputJetson> imuReadVector);
 
 // convert euler angles to quaternion

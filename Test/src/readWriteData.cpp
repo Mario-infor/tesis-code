@@ -39,22 +39,22 @@ void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer)
             IMUTimeFile << tempIMU.time << std::endl;
 
             IMUDataFile << tempIMU.index << std::endl;
-            IMUDataFile << tempIMU.gyroVect.x << std::endl;
-            IMUDataFile << tempIMU.gyroVect.y << std::endl;
-            IMUDataFile << tempIMU.gyroVect.z << std::endl;
-            IMUDataFile << tempIMU.eulerVect.x << std::endl;
-            IMUDataFile << tempIMU.eulerVect.y << std::endl;
-            IMUDataFile << tempIMU.eulerVect.z << std::endl;
-            IMUDataFile << tempIMU.rotQuat.w << std::endl;
-            IMUDataFile << tempIMU.rotQuat.x << std::endl;
-            IMUDataFile << tempIMU.rotQuat.y << std::endl;
-            IMUDataFile << tempIMU.rotQuat.z << std::endl;
-            IMUDataFile << tempIMU.accVect.x << std::endl;
-            IMUDataFile << tempIMU.accVect.y << std::endl;
-            IMUDataFile << tempIMU.accVect.z << std::endl;
-            IMUDataFile << tempIMU.gravVect.x << std::endl;
-            IMUDataFile << tempIMU.gravVect.y << std::endl;
-            IMUDataFile << tempIMU.gravVect.z << std::endl;
+            IMUDataFile << tempIMU.gyroVect.x() << std::endl;
+            IMUDataFile << tempIMU.gyroVect.y() << std::endl;
+            IMUDataFile << tempIMU.gyroVect.z() << std::endl;
+            IMUDataFile << tempIMU.eulerVect.x() << std::endl;
+            IMUDataFile << tempIMU.eulerVect.y() << std::endl;
+            IMUDataFile << tempIMU.eulerVect.z() << std::endl;
+            IMUDataFile << tempIMU.rotQuat.w() << std::endl;
+            IMUDataFile << tempIMU.rotQuat.x() << std::endl;
+            IMUDataFile << tempIMU.rotQuat.y() << std::endl;
+            IMUDataFile << tempIMU.rotQuat.z() << std::endl;
+            IMUDataFile << tempIMU.accVect.x()<< std::endl;
+            IMUDataFile << tempIMU.accVect.y() << std::endl;
+            IMUDataFile << tempIMU.accVect.z() << std::endl;
+            IMUDataFile << tempIMU.gravVect.x() << std::endl;
+            IMUDataFile << tempIMU.gravVect.y() << std::endl;
+            IMUDataFile << tempIMU.gravVect.z() << std::endl;
         }
     }
 }
@@ -83,22 +83,22 @@ std::vector<ImuInputJetson> readDataIMUJetson()
             tempIMUInput.time = value;
 
             fileData >> tempIMUInput.index;
-            fileData >> tempIMUInput.gyroVect.x;
-            fileData >> tempIMUInput.gyroVect.y;
-            fileData >> tempIMUInput.gyroVect.z;
-            fileData >> tempIMUInput.eulerVect.x;
-            fileData >> tempIMUInput.eulerVect.y;
-            fileData >> tempIMUInput.eulerVect.z;
-            fileData >> tempIMUInput.rotQuat.w;
-            fileData >> tempIMUInput.rotQuat.x;
-            fileData >> tempIMUInput.rotQuat.y;
-            fileData >> tempIMUInput.rotQuat.z;
-            fileData >> tempIMUInput.accVect.x;
-            fileData >> tempIMUInput.accVect.y;
-            fileData >> tempIMUInput.accVect.z;
-            fileData >> tempIMUInput.gravVect.x;
-            fileData >> tempIMUInput.gravVect.y;
-            fileData >> tempIMUInput.gravVect.z;
+            fileData >> tempIMUInput.gyroVect.x();
+            fileData >> tempIMUInput.gyroVect.y();
+            fileData >> tempIMUInput.gyroVect.z();
+            fileData >> tempIMUInput.eulerVect.x();
+            fileData >> tempIMUInput.eulerVect.y();
+            fileData >> tempIMUInput.eulerVect.z();
+            fileData >> tempIMUInput.rotQuat.w();
+            fileData >> tempIMUInput.rotQuat.x();
+            fileData >> tempIMUInput.rotQuat.y();
+            fileData >> tempIMUInput.rotQuat.z();
+            fileData >> tempIMUInput.accVect.x();
+            fileData >> tempIMUInput.accVect.y();
+            fileData >> tempIMUInput.accVect.z();
+            fileData >> tempIMUInput.gravVect.x();
+            fileData >> tempIMUInput.gravVect.y();
+            fileData >> tempIMUInput.gravVect.z();
 
             IMUData.push_back(tempIMUInput);
         }
