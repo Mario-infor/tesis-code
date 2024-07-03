@@ -29,23 +29,18 @@ std::chrono::time_point<std::chrono::steady_clock> timeIMUStart;
 // Thread in charge of readng data from camera and store it on camera buffer.
 void cameraCaptureThread();
 
-// Method to calibrate de IMU sensors.
-void imuCalibration();
-
 // Thead in charge of reading data from the IMU.
 void imuThreadJetson();
+
+// Method to calibrate de IMU sensors.
+void imuCalibration();
 
 // Initialisation of the Kalman Filter state and parameters.
 void initKalmanFilter(cv::KalmanFilter &KF, int stateSize);
 
 void predict(cv::KalmanFilter &KF);
 
-void doMeasurement(cv::Mat_<float> &measurement, cv::Mat_<float> measurementOld,
-                    FrameMarkersData frameMarkersData, float deltaT);
-
 void correct(cv::KalmanFilter &KF, cv::Mat_<float> measurement, cv::Mat measurementNoiseCov);
-
-void correctIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurement);
 
 void correctIMU_EKF(
     cv::KalmanFilter &KF,
@@ -53,16 +48,6 @@ void correctIMU_EKF(
     Eigen::MatrixXd measurement,
     Eigen::MatrixXd h,
     Eigen::MatrixXd H);
-
-// Update the transition matrix (A) with new deltaT value.
-void updateTransitionMatrix(cv::KalmanFilter &KF, float deltaT);
-
-// Update the transition matrix (A) for IMU KF with new deltaT and gyro values.
-void updateTransitionMatrixIMU(cv::KalmanFilter &KF, Eigen::Matrix<double, 23, 1> measurenment, float deltaT);
-
-void updateTransitionMatrixFusionIMU(cv::KalmanFilter &KF, float deltaT, int stateSize);
-
-void updateTransitionMatrixFusionCamera (cv::KalmanFilter &KF, float deltaT);
 
 void updateTransitionMatrixFusion(cv::KalmanFilter &KF, float deltaT, int stateSize, Eigen::Vector3d w);
 
@@ -73,18 +58,7 @@ void imuPreintegration(
     Eigen::Vector3d &deltaPos,
     Eigen::Vector3d &deltaVel);
 
-// Method to predict and correct the state of the camera data.
-void runKalmanFilterCamera();
-
-// Method to predict the state of the IMU data.
-void runIMUPrediction();
-
 // Method to predict and correct the state of the IMU and Camera together.
 void runCameraAndIMUKalmanFilter();
-
-Eigen::Matrix<double, 12, 1> getMeasurenmentEstimateFromState(
-    cv::KalmanFilter &KF,
-    Eigen::Matrix<double, 4, 4> Gti,
-    Eigen::Matrix<double, 4, 4> Gci);
 
 #endif // JETSON_H

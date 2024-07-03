@@ -13,25 +13,8 @@
 #define ALPHA_ACC 0.01 // Alpha value for the accelerometer IIR.
 #define ALPHA_GYRO 0.001 // Alpha value for the gyroscope IIR.
 
-// Convert rotation vector to quaternion.
-Eigen::Quaterniond convertOpencvRotVectToQuat(cv::Vec3d rotVect);
-
-// Convert quaternion to rotation vector using Eigen and opencv.
-cv::Vec3d QuatToRotVect(Eigen::Quaterniond quaternion);
-
-// Convert quaternion to rotation vector using Eigen.
-Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion);
-
-// Create a hard copy of camera vector.
-std::vector<CameraInput> hardCopyCameraVector(
-    std::vector<CameraInput> cameraReadVector);
-
-// Get rotation and translation from all frames.
-std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(
-    std::vector<CameraInput> cameraReadVector,
-    cv::Ptr<cv::aruco::Dictionary> dictionary,
-    cv::Mat cameraMatrix,
-    cv::Mat distCoeffs);
+// Prints Euler or Accel data from the IMU to the console.
+void printIMUData();
 
 // Get rotation and translation from one single frame.
 FrameMarkersData getRotationTraslationFromFrame(
@@ -39,9 +22,6 @@ FrameMarkersData getRotationTraslationFromFrame(
     cv::Ptr<cv::aruco::Dictionary> dictionary,
     cv::Mat cameraMatrix,
     cv::Mat distCoeffs);
-
-// Prints Euler or Accel data from the IMU to the console.
-void printIMUData();
 
 // Draw axis on a frame using information from rvecs and tvecs.
 void drawAxisOnFrame(
@@ -60,43 +40,18 @@ Eigen::Matrix4d getGhi(const Eigen::Vector3d w, const Eigen::Vector3d v);
 int getImuStartingIndexBaseOnCamera(std::vector<CameraInput> cameraReadVector,
  std::vector<ImuInputJetson> imuReadVector);
 
-// convert euler angles to quaternion
-Eigen::Quaternion<double> rotVecToQuat(Eigen::Vector3d euler);
-
-void gnuPrintImuPreintegration(
-    FILE *output,
-    std::vector<Eigen::Vector3d> vectorOfPointsOne,
-    std::vector<Eigen::Vector3d> vectorOfPointsTwo,
-    std::vector<Eigen::Vector3d> vectorOfMarkers);
+// Normalize a quaternion using Eigen's normalized() method 
+// and transforming it to positive angle if necessary.
+Eigen::Quaterniond normalizeQuaternion(Eigen::Quaterniond quat);
 
 void gnuPrintImuCompareValues(
     FILE *output,
     std::vector<float> vectorOfPointsOne,
     std::vector<float> vectorOfPointsTwo);
 
-// Normalize a rotation matrix converting it to Quaternion 
-// and using Eigen's normalized() method.
-Eigen::Matrix3d normalizeRotationMatrix(Eigen::Matrix3d matrix);
-
-// Normalize a quaternion using Eigen's normalized() method 
-// and transforming it to positive angle if necessary.
-Eigen::Quaterniond normalizeQuaternion(Eigen::Quaterniond quat);
-
-// Guarantee that the rotation matrix is orthonormal.
-Eigen::Matrix3d GramSchmidt(Eigen::Matrix3d rotationMatrix);
-
-// Project a vector u onto a vector v.
-Eigen::Vector3d proj(Eigen::Vector3d u, Eigen::Vector3d v);
-
-// Get the exponential matrix of a vector.
-Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT);
-
-void normalizeDataSet(std::vector<Eigen::Vector3d> points, std::vector<float> &result, int variable);
-
 cv::Mat convertEigenMatToOpencvMat(Eigen::MatrixXd eigenMat);
-Eigen::MatrixXd convertOpencvMatToEigenMat(cv::Mat cvMat);
 
-Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec);
+Eigen::MatrixXd convertOpencvMatToEigenMat(cv::Mat cvMat);
 
 Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarkersData, int index);
 
@@ -119,6 +74,61 @@ void fixQuatEigen(Eigen::Quaterniond &q);
 int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId);
 
 std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkersData firstFrameMarkersData, Eigen::Matrix4d Gcm, int indexBaseMarker);
+
+
+
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
+///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
+
+
+
+// Convert quaternion to rotation vector using Eigen.
+Eigen::Vector3d QuatToRotVectEigen(Eigen::Quaterniond quaternion);
+
+// Convert rotation vector to quaternion.
+Eigen::Quaterniond convertOpencvRotVectToQuat(cv::Vec3d rotVect);
+
+// Convert quaternion to rotation vector using Eigen and opencv.
+cv::Vec3d QuatToRotVect(Eigen::Quaterniond quaternion);
+
+// Normalize a rotation matrix converting it to Quaternion 
+// and using Eigen's normalized() method.
+Eigen::Matrix3d normalizeRotationMatrix(Eigen::Matrix3d matrix);
+
+// Guarantee that the rotation matrix is orthonormal.
+Eigen::Matrix3d GramSchmidt(Eigen::Matrix3d rotationMatrix);
+
+// Project a vector u onto a vector v.
+Eigen::Vector3d proj(Eigen::Vector3d u, Eigen::Vector3d v);
+
+// Get the exponential matrix of a vector.
+Eigen::Matrix3d matrixExp(Eigen::Vector3d gyroTimesDeltaT);
+
+void normalizeDataSet(std::vector<Eigen::Vector3d> points, std::vector<float> &result, int variable);
+
+Eigen::Matrix<double, 3, 3> getCamRotMatFromRotVec(cv::Vec3d camRvec);
+
+// convert euler angles to quaternion
+Eigen::Quaternion<double> rotVecToQuat(Eigen::Vector3d euler);
+
+// Create a hard copy of camera vector.
+std::vector<CameraInput> hardCopyCameraVector(
+    std::vector<CameraInput> cameraReadVector);
+
+// Get rotation and translation from all frames.
+std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(
+    std::vector<CameraInput> cameraReadVector,
+    cv::Ptr<cv::aruco::Dictionary> dictionary,
+    cv::Mat cameraMatrix,
+    cv::Mat distCoeffs);
+
+void gnuPrintImuPreintegration(
+    FILE *output,
+    std::vector<Eigen::Vector3d> vectorOfPointsOne,
+    std::vector<Eigen::Vector3d> vectorOfPointsTwo,
+    std::vector<Eigen::Vector3d> vectorOfMarkers);
 
 void applyIIRFilterToAccAndGyro(
     Eigen::Vector3d accReading,

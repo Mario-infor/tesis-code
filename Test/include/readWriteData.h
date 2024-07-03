@@ -9,14 +9,14 @@
 // Write IMU data to files.
 void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer);
 
+// Read IMU data from files.
+std::vector<ImuInputJetson> readDataIMUJetson();
+
 // Write camera time data to file and store all frams as .png files.
 void cameraDataWrite(RingBuffer<CameraInput> &cameraFramesBuffer);
 
 // Read camera data and frames from files.
 std::vector<CameraInput> readDataCamera();
-
-// Read IMU data from files.
-std::vector<ImuInputJetson> readDataIMUJetson();
 
 void pointsDataWrite(
     std::vector<Eigen::VectorXd> vectorOfPointsOne,
