@@ -133,11 +133,11 @@ void imuCalibration()
         sensors.readCalibVals();
         printf("Sys: %d, Mag: %d, Gyro: %d, Acc: %d\n", sensors.calSys, sensors.calMag, sensors.calGyro, sensors.calAcc);
         doneCalibrating = sensors.calSys == 3 && sensors.calMag == 3 && sensors.calGyro == 3 && sensors.calAcc == 3;
-        doneCalibrating = false;
+        //doneCalibrating = false;
     } while (!doneCalibrating);
 }
 
-void initKalmanFilter(cv::KalmanFilter &KF, int stateSize)
+void initKalmanFilter(cv::KalmanFilter &KF, const int stateSize)
 {
     KF.statePre = cv::Mat::zeros(stateSize, 1, CV_32F);
     
@@ -513,11 +513,6 @@ void runCameraAndIMUKalmanFilter()
                     Eigen::Vector3d{KF.statePost.at<float>(10), KF.statePost.at<float>(11), KF.statePost.at<float>(12)},
                     Eigen::Vector3d{KF.statePost.at<float>(7), KF.statePost.at<float>(8), KF.statePost.at<float>(9)}
                 );
-                /*stateGhi << 
-                    0,                              -KF.statePost.at<float>(12),     KF.statePost.at<float>(11),      KF.statePost.at<float>(7),
-                    KF.statePost.at<float>(12),     0,                              -KF.statePost.at<float>(10),     KF.statePost.at<float>(8),
-                    -KF.statePost.at<float>(11),     KF.statePost.at<float>(10),     0,                               KF.statePost.at<float>(9),
-                    0,0,0,0;*/
                 
                 Eigen::Matrix4d imuGhiMarker = Gci * stateGhi * Gci_inv;
                 Eigen::Matrix4d imuGhiWorld = Gmw * imuGhiMarker * Gmw_inv;

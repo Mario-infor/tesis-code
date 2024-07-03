@@ -6,7 +6,11 @@
 #include <RingBuffer.h>
 #include <Eigen/Dense>
 
-// Write IMU data to files.
+/**
+ * @brief This method is in charge of writing the IMU data to a binary file. It writes the time, index, gyro, euler, quaternion,
+ * acceleration and gravity data of the IMU to a file.
+ * @param imuDataJetsonBuffer Buffer that contains the IMU data.
+*/
 void IMUDataJetsonWrite(RingBuffer<ImuInputJetson> &imuDataJetsonBuffer);
 
 // Read IMU data from files.
