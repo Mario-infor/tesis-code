@@ -10,6 +10,7 @@
 #include <iterator>
 #include <cmath>
 #include <readWriteData.h>
+#include <map>
 
 
 void printIMUData()
@@ -410,25 +411,22 @@ int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId)
     return baseMarkerIndex;
 }
 
-std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkersData firstFrameMarkersData, Eigen::Matrix4d Gcm, int indexBaseMarker)
+void getAllTransformsBetweenMarkers(
+    FrameMarkersData firstFrameMarkersData,
+    Eigen::Matrix4d Gcm,
+    int indexBaseMarker,
+    std::map<int, Eigen::Matrix4d> &oldCamMeasurementsMap)
 {
-    std::vector<TransformBetweenMarkers> transforms;
-
     int baseMarkerId = firstFrameMarkersData.markerIds[indexBaseMarker];
 
     for(size_t i = 0; i < firstFrameMarkersData.markerIds.size(); i++)
     {
         if(firstFrameMarkersData.markerIds[i] != baseMarkerId)
         {
-            TransformBetweenMarkers transform;
-            transform.baseMarkerId = baseMarkerId;
-            transform.secundaryMarkerId = firstFrameMarkersData.markerIds[i];
             Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i);            
-            transform.G = Gcm * invertG(gCamToMarker);
-            transforms.push_back(transform);
+            oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] =  Gcm * invertG(gCamToMarker);
         }
     }
-    return transforms;
 }
 
 ///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////

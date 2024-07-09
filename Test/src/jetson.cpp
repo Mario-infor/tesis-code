@@ -18,9 +18,9 @@
 #include <readWriteData.h>
 #include <jetson.h>
 #include <utils.h>
-#include <interpolationUtils.h>
 #include <cameraInfo.h>
 #include <Eigen/Dense>
+#include <map>
 
 // Buffer to store camera structs.
 RingBuffer<CameraInput> cameraFramesBuffer = RingBuffer<CameraInput>(RING_BUFFER_LENGTH_CAMERA);
@@ -233,11 +233,13 @@ void runCameraAndIMUKalmanFilter()
     std::vector<Eigen::Vector3d> vectorOfPointsOne;
     std::vector<Eigen::Vector3d> vectorOfPointsTwo;
     std::vector<Eigen::Vector3d> vectorOfMarkers;
-    std::vector<TransformBetweenMarkers> vectorOfTransforms;
+    //std::vector<TransformBetweenMarkers> vectorOfTransforms;
     std::vector<Eigen::Vector3d> vectorErrorPoints;
     std::vector<Eigen::VectorXd> vectorCamMeasurenments;
     std::vector<Eigen::Quaterniond> vectorImuMeasurenments;
     std::vector<Eigen::VectorXd> vectorStates;
+
+    std::map<int, Eigen::Matrix4d> transformsMap;
 
     std::vector<float> timeStamps;
 
@@ -429,29 +431,17 @@ void runCameraAndIMUKalmanFilter()
 
                 for (size_t j = 0; j < frameMarkersData.markerIds.size(); j++)
                 {
-                    //Eigen::Vector3d markerPos = Gcm.block<3, 1>(0, 3);
-                    //vectorOfMarkers.push_back(markerPos);
-                
+                    
                     if(frameMarkersData.markerIds[j] == BASE_MARKER_ID)
                     {
                         Gcm = getGFromFrameMarkersData(frameMarkersData, j);
-                        //vectorOfMarkers.push_back(Eigen::Vector3d{0,0,0});
                     }
                     else
                     {
                         Eigen::Matrix4d tempG = getGFromFrameMarkersData(frameMarkersData, j);
-
-                        for (size_t k = 0; k < vectorOfTransforms.size(); k++)
-                        {
-                            if(vectorOfTransforms[k].secundaryMarkerId == frameMarkersData.markerIds[j])
-                            {
-                                Gcm = vectorOfTransforms[k].G * tempG;
-
-                                //Eigen::Vector3d markerPos = invertG(vectorOfTransforms[k].G).block<3, 1>(0, 3);
-                                //vectorOfMarkers.push_back(markerPos);
-                                break;
-                            }
-                        }
+                        int markerId = frameMarkersData.markerIds[j];
+                        Gcm = transformsMap[markerId] * tempG;
+                                
                     }
 
                     Gmc = invertG(Gcm);
@@ -639,7 +629,7 @@ void runCameraAndIMUKalmanFilter()
             Gcm = getGFromFrameMarkersData(frameMarkersData, indexBaseMarker);
             Gmc = invertG(Gcm);
 
-            vectorOfTransforms = getAllTransformsBetweenMarkers(frameMarkersData, Gcm, indexBaseMarker);
+            getAllTransformsBetweenMarkers(frameMarkersData, Gcm, indexBaseMarker, transformsMap);
 
             Eigen::Vector3d camT = Gmc.block<3,1>(0,3);
             Eigen::Matrix3d camRot = Gmc.block<3,3>(0,0);

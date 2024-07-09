@@ -64,6 +64,7 @@ struct TransformBetweenMarkers
     int baseMarkerId;
     int secundaryMarkerId;
     Eigen::Matrix4d G;
+    
 };
 
 #endif

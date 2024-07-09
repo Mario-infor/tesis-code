@@ -73,8 +73,11 @@ void fixQuatEigen(Eigen::Quaterniond &q);
 
 int getBaseMarkerIndex(std::vector<int> markerIds, int baseMarkerId);
 
-std::vector<TransformBetweenMarkers> getAllTransformsBetweenMarkers(FrameMarkersData firstFrameMarkersData, Eigen::Matrix4d Gcm, int indexBaseMarker);
-
+void getAllTransformsBetweenMarkers(
+    FrameMarkersData firstFrameMarkersData,
+    Eigen::Matrix4d Gcm,
+    int indexBaseMarker,
+    std::map<int, Eigen::Matrix4d> &oldCamMeasurementsMap);
 
 
 ///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
