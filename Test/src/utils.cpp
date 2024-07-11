@@ -88,7 +88,7 @@ void drawAxisOnFrame(
 {
     for (int i = 0; i < (int)rvecs.size(); i++)
     {
-        cv::aruco::drawAxis(frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.05);
+        cv::aruco::drawAxis(frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.02);
     }
 
     cv::imshow(windowTitle, frame);
