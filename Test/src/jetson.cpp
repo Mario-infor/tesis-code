@@ -240,6 +240,8 @@ void runCameraAndIMUKalmanFilter()
     std::vector<Eigen::VectorXd> vectorStates;
 
     std::map<int, Eigen::Matrix4d> transformsMap;
+    std::map<int, Eigen::Vector3d> oldCamTMap;
+    std::map<int, Eigen::Quaterniond> oldCamQuatMap;
 
     std::vector<float> timeStamps;
 
@@ -377,6 +379,7 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Quaterniond originalQuat = imuQuat;
     fixQuatEigen(imuQuat);
 
+    bool firstCamRun = true;
     int index = 0;
 
     while (indexCamera < ites-1)
@@ -431,15 +434,14 @@ void runCameraAndIMUKalmanFilter()
 
                 for (size_t j = 0; j < frameMarkersData.markerIds.size(); j++)
                 {
-                    
-                    if(frameMarkersData.markerIds[j] == BASE_MARKER_ID)
+                    int markerId = frameMarkersData.markerIds[j];
+                    if(markerId == BASE_MARKER_ID)
                     {
                         Gcm = getGFromFrameMarkersData(frameMarkersData, j);
                     }
                     else
                     {
                         Eigen::Matrix4d tempG = getGFromFrameMarkersData(frameMarkersData, j);
-                        int markerId = frameMarkersData.markerIds[j];
                         Gcm = transformsMap[markerId] * tempG;
                                 
                     }
@@ -450,6 +452,17 @@ void runCameraAndIMUKalmanFilter()
                     camRot = Gmc.block<3,3>(0,0);
                     camQuat = Eigen::Quaterniond(camRot);
                     fixQuatEigen(camQuat);
+
+                    if(!firstCamRun)
+                    {  
+                        oldCamT = oldCamTMap[markerId];
+                        oldCamQuat = oldCamQuatMap[markerId];
+                    }
+                    else
+                    {
+                        oldCamT = oldCamTMap[BASE_MARKER_ID];
+                        oldCamQuat = oldCamQuatMap[BASE_MARKER_ID];
+                    }
 
                     w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCamMeasurement);
                     Eigen::Vector3d linearSpeed = (camT - oldCamT) / deltaTCamMeasurement;
@@ -477,6 +490,9 @@ void runCameraAndIMUKalmanFilter()
                         std::cout << "State Pre: " << std::endl << KF.statePre << std::endl << std::endl;
                         std::cout << "statePost: " << std::endl << KF.statePost << std::endl << std::endl;
                         std::cout << "measurementCam: " << std::endl << measurementCam << std::endl << std::endl;
+
+                        oldCamTMap[markerId] = camT;
+                        oldCamQuatMap[markerId] = camQuat;
                     }
                 }
 
@@ -686,6 +702,9 @@ void runCameraAndIMUKalmanFilter()
             oldCamT = camT;
             oldCamQuat = camQuat;
             oldDeltaTCam = tempCameraData.time;
+
+            oldCamTMap[BASE_MARKER_ID] = oldCamT;
+            oldCamQuatMap[BASE_MARKER_ID] = oldCamQuat;
             
             //deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
             //deltaTImu /= 1000;
