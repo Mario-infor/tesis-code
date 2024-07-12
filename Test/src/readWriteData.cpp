@@ -207,25 +207,38 @@ void pointsDataWrite(
     }
 }
 
-void quatDataWrite(
-    std::vector<Eigen::Quaterniond> vectorOfQuats,
-    std::vector<float> timeStamps,
-    std::string fileName)
-{
-    std::string tempNamePointsData = dirPointsFolder + fileName;
+void transformWrite(const Eigen::Matrix4d transform, int fileName, const bool clearFile)
+{   
+    std::string buildedFileName = dirPointsFolder + std::to_string(fileName);
+    std::ofstream file(buildedFileName, std::ios::app);
 
-    std::ofstream PointsFile(tempNamePointsData, std::ios::out);
-
-    if (PointsFile.is_open())
+    if (clearFile)
     {
-        for (size_t i = 0; i < vectorOfQuats.size(); i++)
-        {
-            PointsFile << timeStamps.at(i) << ",";
+        std::ofstream file(buildedFileName, std::ios::out);
+    }
 
-            PointsFile << vectorOfQuats.at(i).w() << ",";
-            PointsFile << vectorOfQuats.at(i).x() << ",";
-            PointsFile << vectorOfQuats.at(i).y() << ",";
-            PointsFile << vectorOfQuats.at(i).z() << std::endl;
+    if (file.is_open())
+    {
+        for (int i = 0; i < transform.rows(); i++)
+        {
+            for (int j = 0; j < transform.cols(); j++)
+            {
+                file << transform(i, j);
+
+                if (j < transform.cols())
+                {
+                    file << ",";
+                }
+                
+            }
         }
+
+        file << std::endl;
+
+        file.close();
+    }
+    else 
+    {
+        std::cout << "Error openning file." << std::endl;
     }
 }

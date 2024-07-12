@@ -66,4 +66,6 @@ void quatDataWrite(
     std::vector<float> timeStamps,
     std::string fileName);
 
+void transformWrite(const Eigen::Matrix4d transform, int fileName, const bool clearFile);
+
 #endif // READWRITEDATA_H

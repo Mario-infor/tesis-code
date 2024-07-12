@@ -329,6 +329,7 @@ void runCameraAndIMUKalmanFilter()
 
     Eigen::Matrix4d Gmc;
     Eigen::Matrix4d Gcm;
+    Eigen::Matrix4d Gcm_baseMarker;
     Eigen::Matrix4d Gwi;
     Eigen::Matrix4d Gmi;
     Eigen::Matrix4d Gci_inv;
@@ -337,6 +338,7 @@ void runCameraAndIMUKalmanFilter()
 
     Gmc.setIdentity();
     Gcm.setIdentity();
+    Gcm_baseMarker.setIdentity();
     Gwi.setIdentity();
     Gmi.setIdentity();
     Gmw.setIdentity();
@@ -416,6 +418,9 @@ void runCameraAndIMUKalmanFilter()
                                      tempCameraData.frame, cameraMatrix, distCoeffs, "Camera Measurement");
                 cv::waitKey(33);
 
+                int indexBaseMarker = getBaseMarkerIndex(frameMarkersData.markerIds, BASE_MARKER_ID);
+                getAllTransformsBetweenMarkers(frameMarkersData, Gcm_baseMarker, indexBaseMarker, transformsMap, false);
+
                 Eigen::Vector3d camT;
                 Eigen::Matrix3d camRot;
                 Eigen::Quaterniond camQuat;
@@ -438,9 +443,11 @@ void runCameraAndIMUKalmanFilter()
                     if(markerId == BASE_MARKER_ID)
                     {
                         Gcm = getGFromFrameMarkersData(frameMarkersData, j);
+                        Gcm_baseMarker = Gcm;
                     }
                     else
                     {
+                        //continue;
                         Eigen::Matrix4d tempG = getGFromFrameMarkersData(frameMarkersData, j);
                         Gcm = transformsMap[markerId] * tempG;
                                 
@@ -467,7 +474,7 @@ void runCameraAndIMUKalmanFilter()
                     w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCamMeasurement);
                     Eigen::Vector3d linearSpeed = (camT - oldCamT) / deltaTCamMeasurement;
 
-                    if(linearSpeed.norm() < 0.5)
+                    if(linearSpeed.norm() < 5)
                     {
                         measurementCam(0) = camT.x();
                         measurementCam(1) = camT.y();
@@ -533,7 +540,8 @@ void runCameraAndIMUKalmanFilter()
                 accBias.setZero();
                 gyroBias.setZero();
 
-                lastOneWasCamera = true;                                  
+                lastOneWasCamera = true;  
+                firstCamRun = false;                                
             }
             else
             {
@@ -647,9 +655,10 @@ void runCameraAndIMUKalmanFilter()
             int indexBaseMarker = getBaseMarkerIndex(frameMarkersData.markerIds, BASE_MARKER_ID);
 
             Gcm = getGFromFrameMarkersData(frameMarkersData, indexBaseMarker);
+            Gcm_baseMarker = Gcm;
             Gmc = invertG(Gcm);
 
-            getAllTransformsBetweenMarkers(frameMarkersData, Gcm, indexBaseMarker, transformsMap);
+            getAllTransformsBetweenMarkers(frameMarkersData, Gcm_baseMarker, indexBaseMarker, transformsMap, true);
 
             Eigen::Vector3d camT = Gmc.block<3,1>(0,3);
             Eigen::Matrix3d camRot = Gmc.block<3,3>(0,0);

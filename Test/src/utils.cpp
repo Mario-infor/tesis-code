@@ -68,7 +68,7 @@ FrameMarkersData getRotationTraslationFromFrame(
 
         std::vector<cv::Vec3d> rvecs, tvecs;
 
-        cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.05, cameraMatrix, distCoeffs, rvecs, tvecs);
+        cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.175, cameraMatrix, distCoeffs, rvecs, tvecs);
 
         frameMarkersData.markerIds = markerIds;
         frameMarkersData.rvecs = rvecs;
@@ -415,7 +415,8 @@ void getAllTransformsBetweenMarkers(
     FrameMarkersData firstFrameMarkersData,
     Eigen::Matrix4d Gcm,
     int indexBaseMarker,
-    std::map<int, Eigen::Matrix4d> &oldCamMeasurementsMap)
+    std::map<int, Eigen::Matrix4d> &oldCamMeasurementsMap,
+    bool clearFile)
 {
     int baseMarkerId = firstFrameMarkersData.markerIds[indexBaseMarker];
 
@@ -423,8 +424,17 @@ void getAllTransformsBetweenMarkers(
     {
         if(firstFrameMarkersData.markerIds[i] != baseMarkerId)
         {
+            
             Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i);            
             oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] =  Gcm * invertG(gCamToMarker);
+
+            if(firstFrameMarkersData.markerIds[i] == 38)
+            {
+                
+                std::cout << oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]].determinant() << std::endl << std::endl;
+            }
+
+            transformWrite(oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]], firstFrameMarkersData.markerIds[i], clearFile);
         }
     }
 }

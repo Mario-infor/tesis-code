@@ -77,7 +77,8 @@ void getAllTransformsBetweenMarkers(
     FrameMarkersData firstFrameMarkersData,
     Eigen::Matrix4d Gcm,
     int indexBaseMarker,
-    std::map<int, Eigen::Matrix4d> &oldCamMeasurementsMap);
+    std::map<int, Eigen::Matrix4d> &oldCamMeasurementsMap,
+    bool clearFile);
 
 
 ///////////////////////////////////////////////// Functions that ar NOT used /////////////////////////////////////////////////////////
