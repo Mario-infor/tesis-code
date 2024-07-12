@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Test/build/jetson.out",
-            "args": [],
+            "args": [0, 0, 0, 1],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

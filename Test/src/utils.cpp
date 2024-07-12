@@ -68,7 +68,7 @@ FrameMarkersData getRotationTraslationFromFrame(
 
         std::vector<cv::Vec3d> rvecs, tvecs;
 
-        cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.175, cameraMatrix, distCoeffs, rvecs, tvecs);
+        cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.17, cameraMatrix, distCoeffs, rvecs, tvecs);
 
         frameMarkersData.markerIds = markerIds;
         frameMarkersData.rvecs = rvecs;
@@ -179,19 +179,27 @@ Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarke
     cv::Mat camRotMat;
     cv::Rodrigues(frameMarkersData.rvecs[index], camRotMat);
 
+    std::cout << "camRotMat: " << camRotMat << std::endl << std::endl;
+
     Eigen::Matrix<double, 3, 3> camRot;
     camRot <<
     camRotMat.at<double>(0, 0), camRotMat.at<double>(0, 1), camRotMat.at<double>(0, 2),
     camRotMat.at<double>(1, 0), camRotMat.at<double>(1, 1), camRotMat.at<double>(1, 2),
     camRotMat.at<double>(2, 0), camRotMat.at<double>(2, 1), camRotMat.at<double>(2, 2);
 
+    std::cout << "camRot: " << std::endl << camRot << std::endl << std::endl;
+
     Eigen::Vector3d camT{frameMarkersData.tvecs[index].val[0], frameMarkersData.tvecs[index].val[1], frameMarkersData.tvecs[index].val[2]};
     
+    std::cout << "camT: " << std::endl << camT << std::endl << std::endl;
+
     Eigen::Matrix<double, 4, 4> g;
     g.setIdentity();
 
     g.block<3,3>(0,0) = camRot;
     g.block<3,1>(0,3) = camT;
+
+    std::cout << "g: " << std::endl << g << std::endl << std::endl;
     
     return g;
 }
@@ -361,7 +369,8 @@ Eigen::Matrix4d invertG(Eigen::Matrix4d G)
     Eigen::Matrix4d invG;
     invG.setIdentity();
     invG.block<3,3>(0,0) = G.block<3,3>(0,0).transpose();
-    invG.block<3,1>(0,3) = -G.block<3,3>(0,0).transpose()*G.block<3,1>(0,3);
+    invG.block<3,1>(0,3) = (-(G.block<3,3>(0,0).transpose()))*G.block<3,1>(0,3);
+
     return invG;
 }
 
@@ -425,8 +434,14 @@ void getAllTransformsBetweenMarkers(
         if(firstFrameMarkersData.markerIds[i] != baseMarkerId)
         {
             
-            Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i);            
-            oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] =  Gcm * invertG(gCamToMarker);
+            Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i); 
+
+            std::cout << "Gcm: " << std::endl << Gcm << std::endl << std::endl;
+            std::cout << "gCamToMarker: " << std::endl << gCamToMarker << std::endl << std::endl;
+            
+            oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] =  invertG(Gcm) * gCamToMarker;
+
+            std::cout << "Transform: " << std::endl << oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] << std::endl << std::endl;
 
             if(firstFrameMarkersData.markerIds[i] == 38)
             {

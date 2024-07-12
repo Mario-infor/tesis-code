@@ -303,6 +303,9 @@ void runCameraAndIMUKalmanFilter()
     Eigen::MatrixXd measurementCam(measurementSize, 1);
     measurementCam.setZero();
 
+    Eigen::MatrixXd measCamBaseMarker(measurementSize, 1);
+    measCamBaseMarker.setZero();
+
     Eigen::MatrixXd measurementImu(measurementSize, 1);
     measurementImu.setZero();
 
@@ -489,6 +492,11 @@ void runCameraAndIMUKalmanFilter()
                         measurementCam(10) = w.x(); // angular speed (x)
                         measurementCam(11) = w.y(); // angular speed (y)
                         measurementCam(12) = w.z(); // angular speed (z)
+
+                        if(markerId == BASE_MARKER_ID)
+                        {
+                            measCamBaseMarker = measurementCam;
+                        }
 
                         cv::Mat tempMeasurement = convertEigenMatToOpencvMat(measurementCam);
                         correct(KF, tempMeasurement, measurementNoiseCovCam);
@@ -692,6 +700,8 @@ void runCameraAndIMUKalmanFilter()
             measurementCam(11) = tempAngVel.y(); // angular speed (y)
             measurementCam(12) = tempAngVel.z(); // angular speed (z)
 
+            measCamBaseMarker = measurementCam;
+
             KF.statePost.at<float>(0) = measurementCam(0);
             KF.statePost.at<float>(1) = measurementCam(1);
             KF.statePost.at<float>(2) = measurementCam(2);
@@ -770,160 +780,200 @@ void runCameraAndIMUKalmanFilter()
         else
             timeStamps.push_back(oldDeltaTImu);
 
-        vectorCamMeasurenments.push_back(measurementCam);
+        vectorCamMeasurenments.push_back(measCamBaseMarker);
         vectorStates.push_back(convertOpencvMatToEigenMat(KF.statePost));
 
         //vectorImuMeasurenments.push_back(originalQuat);
 
         index++;
     }
-
+    
     pointsDataWrite(vectorCamMeasurenments, vectorStates, timeStamps, "cameraVsKalman.csv");
     //quatDataWrite(vectorImuMeasurenments, timeStamps, "imuQuats.csv");
 
     pclose(output);
 }
 
-// Main method that creates threads, writes and read data from files and displays data on console.
-int main()
+void testAruco()
 {
-    bool generateNewData = false;
-    bool preccessData = false;
-    bool ifCalibrateIMUOnly = false;
-    bool runKalmanFilterBool = true;
+    std::map<int, Eigen::Matrix4d> transformsMap;
+    std::vector<CameraInput> cameraData = readDataCamera();
 
-    if (ifCalibrateIMUOnly)
+    CameraInput CamMeasurement = cameraData.at(0);
+
+    FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(CamMeasurement,
+         dictionary, cameraMatrix, distCoeffs);
+
+    drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
+                    CamMeasurement.frame, cameraMatrix, distCoeffs, "Camera Measurement");
+
+    int indexBaseMarker = getBaseMarkerIndex(frameMarkersData.markerIds, BASE_MARKER_ID);
+    Eigen::Matrix4d Gcm = getGFromFrameMarkersData(frameMarkersData, indexBaseMarker);
+
+    getAllTransformsBetweenMarkers(frameMarkersData, Gcm, indexBaseMarker, transformsMap, false);
+}
+
+// Main method that creates threads, writes and read data from files and displays data on console.
+int main(int argc, char *argv[])
+{
+    if (argc == 5)
     {
-        imuCalibration();
-        //printIMUData();
-    }
-    if (runKalmanFilterBool)
-    {
-        runCameraAndIMUKalmanFilter();
+        bool ifCalibrateIMUOnly = false;
+        bool generateNewData = false;
+        bool preccessData = false;
+        bool runKalmanFilterBool = false;
+
+        if (strcmp(argv[1], "1")  == 0) { ifCalibrateIMUOnly = true; }
+
+        if (strcmp(argv[2], "1")  == 0) { generateNewData = true; }
+
+        if (strcmp(argv[3], "1")  == 0) { preccessData = true; }
+
+        if (strcmp(argv[4], "1")  == 0) { runKalmanFilterBool = true; }
+
+
+        if (ifCalibrateIMUOnly)
+        {
+            imuCalibration();
+            //printIMUData();
+        }
+        if (runKalmanFilterBool)
+        {
+            //runCameraAndIMUKalmanFilter();
+            testAruco();
+        }
+        else
+        {
+            if (generateNewData)
+            {
+                timeCameraStart = std::chrono::steady_clock::now();
+                timeIMUStart = std::chrono::steady_clock::now();
+
+                std::thread cameraCapture(cameraCaptureThread);
+                std::thread imu(imuThreadJetson);
+
+                cameraCapture.join();
+                imu.join();
+
+                cameraDataWrite(cameraFramesBuffer);
+                IMUDataJetsonWrite(imuDataJetsonBuffer);
+            }
+
+            if (preccessData)
+            {
+                std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
+                std::vector<CameraInput> cameraReadVector = readDataCamera();
+
+                WINDOW *win;
+                char buff[512];
+
+                win = initscr();
+                clearok(win, TRUE);
+
+                size_t imuIndex = 0;
+                size_t cameraIndex = 0;
+
+                int oldTimeIMU = 0;
+                int oldTimeCamera = 0;
+
+                while (imuIndex < imuReadVector.size() && cameraIndex < cameraReadVector.size())
+                {
+                    if (imuIndex < imuReadVector.size())
+                    {
+                        ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
+
+                        wmove(win, 3, 2);
+                        snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
+                        waddstr(win, buff);
+
+                        wmove(win, 5, 2);
+                        snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroVect.x(), imuDataJetson.gyroVect.y(), imuDataJetson.gyroVect.z());
+                        waddstr(win, buff);
+
+                        wmove(win, 7, 2);
+                        snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerVect.x(), imuDataJetson.eulerVect.y(), imuDataJetson.eulerVect.z());
+                        waddstr(win, buff);
+
+                        wmove(win, 9, 2);
+                        snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w(), imuDataJetson.rotQuat.x(),
+                                imuDataJetson.rotQuat.y(), imuDataJetson.rotQuat.z());
+                        waddstr(win, buff);
+
+                        wmove(win, 11, 3);
+                        snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accVect.x(), imuDataJetson.accVect.y(), imuDataJetson.accVect.z());
+                        waddstr(win, buff);
+
+                        wmove(win, 13, 2);
+                        snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravVect.x(), imuDataJetson.gravVect.y(), imuDataJetson.gravVect.z());
+                        waddstr(win, buff);
+
+                        if (imuIndex != 0)
+                        {
+                            wmove(win, 15, 2);
+                            snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
+                            waddstr(win, buff);
+
+                            oldTimeIMU = imuDataJetson.time;
+                        }
+                        else
+                        {
+                            wmove(win, 15, 2);
+                            snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
+                            waddstr(win, buff);
+                        }
+                    }
+
+                    if (cameraIndex < cameraReadVector.size())
+                    {
+                        CameraInput frame = cameraReadVector.at(cameraIndex);
+
+                        wmove(win, 19, 2);
+                        snprintf(buff, 511, "Index = %0d", frame.index);
+                        waddstr(win, buff);
+
+                        if (cameraIndex != 0)
+                        {
+                            wmove(win, 21, 2);
+                            snprintf(buff, 511, "Time between captures (IMU): %010d", frame.time - oldTimeCamera);
+                            waddstr(win, buff);
+
+                            oldTimeCamera = frame.time;
+                        }
+                        else
+                        {
+                            wmove(win, 21, 2);
+                            snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
+                            waddstr(win, buff);
+                        }
+
+                        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame,
+                        dictionary, cameraMatrix, distCoeffs);
+
+                        drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
+                                        frame.frame, cameraMatrix, distCoeffs, "Jetson");
+                    }
+
+                    cv::waitKey(33);
+
+                    wrefresh(win);
+                    wclear(win);
+
+                    imuIndex++;
+                    cameraIndex++;
+                }
+
+                endwin();
+            }
+        }
     }
     else
     {
-        if (generateNewData)
-        {
-            timeCameraStart = std::chrono::steady_clock::now();
-            timeIMUStart = std::chrono::steady_clock::now();
-
-            std::thread cameraCapture(cameraCaptureThread);
-            std::thread imu(imuThreadJetson);
-
-            cameraCapture.join();
-            imu.join();
-
-            cameraDataWrite(cameraFramesBuffer);
-            IMUDataJetsonWrite(imuDataJetsonBuffer);
-        }
-
-        if (preccessData)
-        {
-            std::vector<ImuInputJetson> imuReadVector = readDataIMUJetson();
-            std::vector<CameraInput> cameraReadVector = readDataCamera();
-
-            WINDOW *win;
-            char buff[512];
-
-            win = initscr();
-            clearok(win, TRUE);
-
-            size_t imuIndex = 0;
-            size_t cameraIndex = 0;
-
-            int oldTimeIMU = 0;
-            int oldTimeCamera = 0;
-
-            while (imuIndex < imuReadVector.size() && cameraIndex < cameraReadVector.size())
-            {
-                if (imuIndex < imuReadVector.size())
-                {
-                    ImuInputJetson imuDataJetson = imuReadVector.at(imuIndex);
-
-                    wmove(win, 3, 2);
-                    snprintf(buff, 511, "Index = %0d", imuDataJetson.index);
-                    waddstr(win, buff);
-
-                    wmove(win, 5, 2);
-                    snprintf(buff, 511, "Gyro = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gyroVect.x(), imuDataJetson.gyroVect.y(), imuDataJetson.gyroVect.z());
-                    waddstr(win, buff);
-
-                    wmove(win, 7, 2);
-                    snprintf(buff, 511, "Euler = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.eulerVect.x(), imuDataJetson.eulerVect.y(), imuDataJetson.eulerVect.z());
-                    waddstr(win, buff);
-
-                    wmove(win, 9, 2);
-                    snprintf(buff, 511, "Quat = {W=%06.2f, X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.rotQuat.w(), imuDataJetson.rotQuat.x(),
-                             imuDataJetson.rotQuat.y(), imuDataJetson.rotQuat.z());
-                    waddstr(win, buff);
-
-                    wmove(win, 11, 3);
-                    snprintf(buff, 511, "Acc = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.accVect.x(), imuDataJetson.accVect.y(), imuDataJetson.accVect.z());
-                    waddstr(win, buff);
-
-                    wmove(win, 13, 2);
-                    snprintf(buff, 511, "Grav = {X=%06.2f, Y=%06.2f, Z=%06.2f}", imuDataJetson.gravVect.x(), imuDataJetson.gravVect.y(), imuDataJetson.gravVect.z());
-                    waddstr(win, buff);
-
-                    if (imuIndex != 0)
-                    {
-                        wmove(win, 15, 2);
-                        snprintf(buff, 511, "Time between captures (IMU): %010d", imuDataJetson.time - oldTimeIMU);
-                        waddstr(win, buff);
-
-                        oldTimeIMU = imuDataJetson.time;
-                    }
-                    else
-                    {
-                        wmove(win, 15, 2);
-                        snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
-                        waddstr(win, buff);
-                    }
-                }
-
-                if (cameraIndex < cameraReadVector.size())
-                {
-                    CameraInput frame = cameraReadVector.at(cameraIndex);
-
-                    wmove(win, 19, 2);
-                    snprintf(buff, 511, "Index = %0d", frame.index);
-                    waddstr(win, buff);
-
-                    if (cameraIndex != 0)
-                    {
-                        wmove(win, 21, 2);
-                        snprintf(buff, 511, "Time between captures (IMU): %010d", frame.time - oldTimeCamera);
-                        waddstr(win, buff);
-
-                        oldTimeCamera = frame.time;
-                    }
-                    else
-                    {
-                        wmove(win, 21, 2);
-                        snprintf(buff, 511, "Time between captures (IMU): %010d", 0);
-                        waddstr(win, buff);
-                    }
-
-                    FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame,
-                     dictionary, cameraMatrix, distCoeffs);
-
-                    drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
-                                     frame.frame, cameraMatrix, distCoeffs, "Jetson");
-                }
-
-                cv::waitKey(33);
-
-                wrefresh(win);
-                wclear(win);
-
-                imuIndex++;
-                cameraIndex++;
-            }
-
-            endwin();
-        }
+        std::cout << "You must provide 4 arguments like this ./jetson.out arg1 arg2 arg3 arg4" << std::endl; 
+        std::cout << "(argumments must have values of 1 if you wish to perfrom the corresponding operation)" << std::endl;
     }
+    
+
+    
 
     return 0;
 }
