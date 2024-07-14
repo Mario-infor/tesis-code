@@ -7,9 +7,9 @@
 #define FLIP_METHOD 0
 
 cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) <<
-    791.330070013496,   0,                  409.12509669936657,
-    0,                  595.8977808485818,  295.52098484167175,
-    0,                  0,                  1);
+    595.8977808485818,   0,                 409.12509669936657,
+    0,                   791.330070013496,  295.52098484167175,
+    0,                   0,                 1);
 
 cv::Mat distCoeffs = (cv::Mat_<double>(1, 4) << 0.12912260003585463, \
                                                 -0.25388754628599064, \
@@ -17,6 +17,7 @@ cv::Mat distCoeffs = (cv::Mat_<double>(1, 4) << 0.12912260003585463, \
                                                 0.0018654081762782874);
 
 cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
+cv::Ptr<cv::aruco::DetectorParameters>  detectorParams = cv::aruco::DetectorParameters::create();
 
 // Pipeline for camera on Jetson Board.
 std::string gstreamerPipeline (int captureWidth, int captureHeight, int displayWidth, int displayHeight, int framerate, int flipMethod) {

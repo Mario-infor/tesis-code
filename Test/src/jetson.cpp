@@ -255,7 +255,7 @@ void runCameraAndIMUKalmanFilter()
     cameraData.erase(cameraData.begin());
 
     FrameMarkersData firstFrameMarkersData = getRotationTraslationFromFrame(firstCamMeasurement,
-         dictionary, cameraMatrix, distCoeffs);
+         dictionary, cameraMatrix, distCoeffs, detectorParams);
 
     int stateSize = 13;
     int measurementSize = 13;
@@ -357,7 +357,7 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Vector3d firstImuAcc;
 
     FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData,
-         dictionary, cameraMatrix, distCoeffs);
+         dictionary, cameraMatrix, distCoeffs, detectorParams);
 
     Eigen::Vector3d gyro{tempImuData.gyroVect.x(), tempImuData.gyroVect.y(), tempImuData.gyroVect.z()};
     Eigen::Vector3d acc{tempImuData.accVect.x(), tempImuData.accVect.y(), tempImuData.accVect.z()};
@@ -415,14 +415,20 @@ void runCameraAndIMUKalmanFilter()
             if(isCameraNext)
             {
                 CameraInput tempCameraData = cameraData.at(indexCamera);
-                FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(tempCameraData, dictionary, cameraMatrix, distCoeffs);
+                FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(
+                    tempCameraData,
+                    dictionary,
+                    cameraMatrix,
+                    distCoeffs,
+                    detectorParams);
 
                 drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
                                      tempCameraData.frame, cameraMatrix, distCoeffs, "Camera Measurement");
                 cv::waitKey(33);
 
                 int indexBaseMarker = getBaseMarkerIndex(frameMarkersData.markerIds, BASE_MARKER_ID);
-                getAllTransformsBetweenMarkers(frameMarkersData, Gcm_baseMarker, indexBaseMarker, transformsMap, false);
+                Gcm = getGFromFrameMarkersData(frameMarkersData, indexBaseMarker);
+                getAllTransformsBetweenMarkers(frameMarkersData, Gcm, indexBaseMarker, transformsMap, false);
 
                 Eigen::Vector3d camT;
                 Eigen::Matrix3d camRot;
@@ -447,16 +453,17 @@ void runCameraAndIMUKalmanFilter()
                     {
                         Gcm = getGFromFrameMarkersData(frameMarkersData, j);
                         Gcm_baseMarker = Gcm;
+                        Gmc = invertG(Gcm);
                     }
                     else
                     {
                         //continue;
                         Eigen::Matrix4d tempG = getGFromFrameMarkersData(frameMarkersData, j);
-                        Gcm = transformsMap[markerId] * tempG;
+                        Gmc = transformsMap[markerId] * tempG;
                                 
                     }
 
-                    Gmc = invertG(Gcm);
+                    
 
                     camT = Gmc.block<3,1>(0,3);
                     camRot = Gmc.block<3,3>(0,0);
@@ -472,6 +479,7 @@ void runCameraAndIMUKalmanFilter()
                     {
                         oldCamT = oldCamTMap[BASE_MARKER_ID];
                         oldCamQuat = oldCamQuatMap[BASE_MARKER_ID];
+                        firstCamRun = false;
                     }
 
                     w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCamMeasurement);
@@ -728,7 +736,8 @@ void runCameraAndIMUKalmanFilter()
             //deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
             //deltaTImu /= 1000;
 
-            Gmi = Gci * Gmc;
+            //Gmi = Gci * Gmc;
+            Gmi =  Gmc * Gci;
 
             Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
 
@@ -800,9 +809,9 @@ void testAruco()
     std::vector<CameraInput> cameraData = readDataCamera();
 
     CameraInput CamMeasurement = cameraData.at(0);
-
+    detectorParams->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
     FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(CamMeasurement,
-         dictionary, cameraMatrix, distCoeffs);
+         dictionary, cameraMatrix, distCoeffs, detectorParams);
 
     drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
                     CamMeasurement.frame, cameraMatrix, distCoeffs, "Camera Measurement");
@@ -810,7 +819,59 @@ void testAruco()
     int indexBaseMarker = getBaseMarkerIndex(frameMarkersData.markerIds, BASE_MARKER_ID);
     Eigen::Matrix4d Gcm = getGFromFrameMarkersData(frameMarkersData, indexBaseMarker);
 
+    std::cout << "Gcm: " << std::endl << Gcm << std::endl << std::endl;
+
     getAllTransformsBetweenMarkers(frameMarkersData, Gcm, indexBaseMarker, transformsMap, false);
+
+    int indexMarker = getBaseMarkerIndex(frameMarkersData.markerIds, 80);
+    Eigen::Matrix4d tempG = getGFromFrameMarkersData(frameMarkersData, indexMarker);
+    Eigen::Matrix4d Gcm_from_80 = transformsMap[80] * invertG(tempG);
+
+    std::cout << "Gcm: " << std::endl << invertG(Gcm) << std::endl << std::endl;
+    std::cout << "Gcm_from_80: " << std::endl << Gcm_from_80 << std::endl << std::endl;
+}
+
+void testSingleMarker()
+{
+    cv::Mat frame, grayscale;
+    frame = cv::imread("marker_30.jpg", cv::IMREAD_COLOR);
+    
+    if (frame.empty())
+        {
+            std::cerr << "Could not capture frame." << std::endl;
+        }
+        else
+        {
+            cv::cvtColor(frame, grayscale, cv::COLOR_BGR2GRAY);
+            std::vector<int> markerIds;
+            std::vector<std::vector<cv::Point2f>> markerCorners;
+
+            std::vector<cv::Mat> rejectedCandidates, cameraMatrixVector, distCoeffsVector;
+            cameraMatrixVector.push_back(cameraMatrix);
+            distCoeffsVector.push_back(distCoeffs);
+            cv::aruco::detectMarkers(
+                frame,
+                dictionary,
+                markerCorners,
+                markerIds,
+                detectorParams,
+                rejectedCandidates,
+                cameraMatrixVector,
+                distCoeffsVector);
+
+            cv::aruco::drawDetectedMarkers(frame, markerCorners, markerIds);
+
+            std::vector<cv::Vec3d> rvecs, tvecs;
+
+            cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.17, cameraMatrix, distCoeffs, rvecs, tvecs);
+            
+            drawAxisOnFrame(rvecs, tvecs, frame, cameraMatrix, distCoeffs, "Markre Test");
+
+            cv::waitKey();
+
+            std::cout << "Rvecs: " << rvecs.at(0) << std::endl;
+            std::cout << "Tvecs: " << tvecs.at(0) << std::endl;
+        }
 }
 
 // Main method that creates threads, writes and read data from files and displays data on console.
@@ -841,6 +902,7 @@ int main(int argc, char *argv[])
         {
             //runCameraAndIMUKalmanFilter();
             testAruco();
+            //testSingleMarker();
         }
         else
         {
@@ -947,7 +1009,7 @@ int main(int argc, char *argv[])
                         }
 
                         FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(frame,
-                        dictionary, cameraMatrix, distCoeffs);
+                        dictionary, cameraMatrix, distCoeffs, detectorParams);
 
                         drawAxisOnFrame(frameMarkersData.rvecs, frameMarkersData.tvecs,
                                         frame.frame, cameraMatrix, distCoeffs, "Jetson");

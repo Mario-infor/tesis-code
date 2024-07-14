@@ -21,7 +21,8 @@ FrameMarkersData getRotationTraslationFromFrame(
     CameraInput frame, 
     cv::Ptr<cv::aruco::Dictionary> dictionary,
     cv::Mat cameraMatrix,
-    cv::Mat distCoeffs);
+    cv::Mat distCoeffs,
+    cv::Ptr<cv::aruco::DetectorParameters> detectorParams);
 
 // Draw axis on a frame using information from rvecs and tvecs.
 void drawAxisOnFrame(
@@ -126,7 +127,8 @@ std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(
     std::vector<CameraInput> cameraReadVector,
     cv::Ptr<cv::aruco::Dictionary> dictionary,
     cv::Mat cameraMatrix,
-    cv::Mat distCoeffs);
+    cv::Mat distCoeffs,
+    cv::Ptr<cv::aruco::DetectorParameters> detectorParams);
 
 void gnuPrintImuPreintegration(
     FILE *output,

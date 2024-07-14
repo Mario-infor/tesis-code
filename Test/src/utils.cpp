@@ -54,13 +54,26 @@ FrameMarkersData getRotationTraslationFromFrame(
     CameraInput frame,
     cv::Ptr<cv::aruco::Dictionary> dictionary,
     cv::Mat cameraMatrix,
-    cv::Mat distCoeffs)
+    cv::Mat distCoeffs,
+    cv::Ptr<cv::aruco::DetectorParameters> detectorParams)
 {
     FrameMarkersData frameMarkersData;
 
     std::vector<int> markerIds;
     std::vector<std::vector<cv::Point2f>> markerCorners;
-    cv::aruco::detectMarkers(frame.frame, dictionary, markerCorners, markerIds);
+    std::vector<cv::Mat> rejectedCandidates, cameraMatrixVector, distCoeffsVector;
+    cameraMatrixVector.push_back(cameraMatrix);
+    distCoeffsVector.push_back(distCoeffs);
+
+    cv::aruco::detectMarkers(
+                frame.frame,
+                dictionary,
+                markerCorners,
+                markerIds,
+                detectorParams,
+                rejectedCandidates,
+                cameraMatrixVector,
+                distCoeffsVector);
 
     if (markerIds.size() > 0)
     {
@@ -369,7 +382,7 @@ Eigen::Matrix4d invertG(Eigen::Matrix4d G)
     Eigen::Matrix4d invG;
     invG.setIdentity();
     invG.block<3,3>(0,0) = G.block<3,3>(0,0).transpose();
-    invG.block<3,1>(0,3) = (-(G.block<3,3>(0,0).transpose()))*G.block<3,1>(0,3);
+    invG.block<3,1>(0,3) = -G.block<3,3>(0,0).transpose() * G.block<3,1>(0,3);
 
     return invG;
 }
@@ -427,30 +440,17 @@ void getAllTransformsBetweenMarkers(
     std::map<int, Eigen::Matrix4d> &oldCamMeasurementsMap,
     bool clearFile)
 {
-    int baseMarkerId = firstFrameMarkersData.markerIds[indexBaseMarker];
-
     for(size_t i = 0; i < firstFrameMarkersData.markerIds.size(); i++)
     {
-        if(firstFrameMarkersData.markerIds[i] != baseMarkerId)
-        {
-            
-            Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i); 
+        Eigen::Matrix4d gCamToMarker = getGFromFrameMarkersData(firstFrameMarkersData, i); 
+        std::cout << "Gcm: " << std::endl << Gcm << std::endl << std::endl;
+        std::cout << "gCamToMarker: " << std::endl << gCamToMarker << std::endl << std::endl;
+        
+        oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] =  invertG(Gcm) * gCamToMarker;
+        std::cout << "Transform: " << std::endl << oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] << std::endl << std::endl;
 
-            std::cout << "Gcm: " << std::endl << Gcm << std::endl << std::endl;
-            std::cout << "gCamToMarker: " << std::endl << gCamToMarker << std::endl << std::endl;
-            
-            oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] =  invertG(Gcm) * gCamToMarker;
-
-            std::cout << "Transform: " << std::endl << oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]] << std::endl << std::endl;
-
-            if(firstFrameMarkersData.markerIds[i] == 38)
-            {
-                
-                std::cout << oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]].determinant() << std::endl << std::endl;
-            }
-
-            transformWrite(oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]], firstFrameMarkersData.markerIds[i], clearFile);
-        }
+        transformWrite(oldCamMeasurementsMap[firstFrameMarkersData.markerIds[i]], firstFrameMarkersData.markerIds[i], clearFile);
+        
     }
 }
 
@@ -634,13 +634,20 @@ std::vector<FrameMarkersData> getRotationTraslationFromAllFrames(
     std::vector<CameraInput> cameraReadVector,
     cv::Ptr<cv::aruco::Dictionary> dictionary,
     cv::Mat cameraMatrix,
-    cv::Mat distCoeffs)
+    cv::Mat distCoeffs,
+    cv::Ptr<cv::aruco::DetectorParameters> detectorParams)
 {
     std::vector<FrameMarkersData> frameMarkersDataVector;
 
     for (size_t i = 0; i < cameraReadVector.size(); i++)
     {
-        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(cameraReadVector[i], dictionary, cameraMatrix, distCoeffs);
+        FrameMarkersData frameMarkersData = getRotationTraslationFromFrame(
+            cameraReadVector[i],
+            dictionary,
+            cameraMatrix,
+            distCoeffs,
+            detectorParams);
+
         frameMarkersDataVector.push_back(frameMarkersData);
     }
 

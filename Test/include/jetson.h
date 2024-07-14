@@ -147,5 +147,6 @@ void imuPreintegration(
  * @return It writes all measurement of the camera and the state to a csv file.
 */
 void runCameraAndIMUKalmanFilter();
+void testSingleMarker();
 
 #endif // JETSON_H

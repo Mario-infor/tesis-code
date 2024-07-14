@@ -4,12 +4,13 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Test/build/jetson.out",
-            "args": [0, 0, 0, 1],
+            "args": ["0", "0", "0", "1"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],
