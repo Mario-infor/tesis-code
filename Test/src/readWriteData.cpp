@@ -209,7 +209,7 @@ void pointsDataWrite(
 
 void transformWrite(const Eigen::Matrix4d transform, int fileName, const bool clearFile)
 {   
-    std::string buildedFileName = dirPointsFolder + std::to_string(fileName);
+    std::string buildedFileName = dirPointsFolder + std::to_string(fileName) + ".csv";
     std::ofstream file(buildedFileName, std::ios::app);
 
     if (clearFile)

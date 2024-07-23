@@ -15,6 +15,7 @@
 
 void printIMUData()
 {
+    
     char filename[] = IMU_ADDRESS;
     BNO055 sensors;
     sensors.openDevice(filename);
@@ -29,6 +30,7 @@ void printIMUData()
     {
         sensors.readAll();
         sensors.readAxisRemap();
+
         wmove(win, 5, 2);
 
         wmove(win, 5, 2);
@@ -42,6 +44,19 @@ void printIMUData()
         snprintf(buff, 512, "axis=[axisConfig=%d, axisSign=%d]",
                  sensors.axisConfig,
                  sensors.axisSign);
+        waddstr(win, buff);
+
+        wmove(win, 9, 2);
+        snprintf(buff, 512, "quat=[q=%07.5lf, x=%07.5lf, y=%07.5lf, z=%07.5lf]",
+                 sensors.qOrientation.vi[3] * sensors.Scale,
+                 sensors.qOrientation.vi[0] * sensors.Scale,
+                 sensors.qOrientation.vi[1] * sensors.Scale,
+                 sensors.qOrientation.vi[2] * sensors.Scale);
+        waddstr(win, buff);
+
+        wmove(win, 11, 2);
+        snprintf(buff, 512, "operationModeRead=[operationModeRead=%d]",
+                 sensors.operationModeRead);
         waddstr(win, buff);
 
         wrefresh(win);
@@ -236,27 +251,27 @@ void calculateHAndJacobian(
     Eigen::MatrixXd &H
     )
 {
-    float t1_gmc = KF.statePre.at<float>(0);
-    float t2_gmc = KF.statePre.at<float>(1);
-    float t3_gmc = KF.statePre.at<float>(2);
+    float t1_gmc = KF.statePost.at<float>(0);
+    float t2_gmc = KF.statePost.at<float>(1);
+    float t3_gmc = KF.statePost.at<float>(2);
 
-    float q0 = KF.statePre.at<float>(3);
-    float q1 = KF.statePre.at<float>(4);
-    float q2 = KF.statePre.at<float>(5);
-    float q3 = KF.statePre.at<float>(6);
+    float q0 = KF.statePost.at<float>(3);
+    float q1 = KF.statePost.at<float>(4);
+    float q2 = KF.statePost.at<float>(5);
+    float q3 = KF.statePost.at<float>(6);
 
     float q0_2 = q0*q0;
     float q1_2 = q1*q1;
     float q2_2 = q2*q2;
     float q3_2 = q3*q3;
 
-    float v1 = KF.statePre.at<float>(7);
-    float v2 = KF.statePre.at<float>(8);
-    float v3 = KF.statePre.at<float>(9);
+    float v1 = KF.statePost.at<float>(7);
+    float v2 = KF.statePost.at<float>(8);
+    float v3 = KF.statePost.at<float>(9);
 
-    float w0 = KF.statePre.at<float>(10);
-    float w1 = KF.statePre.at<float>(11);
-    float w2 = KF.statePre.at<float>(12);
+    float w0 = KF.statePost.at<float>(10);
+    float w1 = KF.statePost.at<float>(11);
+    float w2 = KF.statePost.at<float>(12);
 
     float r00_gci_inv = Gci_inv(0,0);
     float r01_gci_inv = Gci_inv(0,1);
@@ -286,10 +301,10 @@ void calculateHAndJacobian(
     float t2_gci = Gci(1,3);
     float t3_gci = Gci(2,3);
 
-
-    float h0 = r20_gci*(r21_gci_inv*w1-r11_gci_inv*w2)+r21_gci*(r01_gci_inv*w2-r21_gci_inv*w0)+r22_gci*(r11_gci_inv*w0-r01_gci_inv*w1);
-    float h1 = r00_gci*(r22_gci_inv*w1-r12_gci_inv*w2)+r01_gci*(r02_gci_inv*w2-r22_gci_inv*w0)+r02_gci*(r12_gci_inv*w0-r02_gci_inv*w1);
-    float h2 = r10_gci*(r20_gci_inv*w1-r10_gci_inv*w2)+r11_gci*(r00_gci_inv*w2-r20_gci_inv*w0)+r12_gci*(r10_gci_inv*w0-r00_gci_inv*w1);
+               
+    float h0 = r20_gci_inv*(r21_gci*w1-r11_gci*w2)+r21_gci_inv*(r01_gci*w2-r21_gci*w0)+r22_gci_inv*(r11_gci*w0-r01_gci*w1);
+    float h1 = r00_gci_inv*(r22_gci*w1-r12_gci*w2)+r01_gci_inv*(r02_gci*w2-r22_gci*w0)+r02_gci_inv*(r12_gci*w0-r02_gci*w1);
+    float h2 = r10_gci_inv*(r20_gci*w1-r10_gci*w2)+r11_gci_inv*(r00_gci*w2-r20_gci*w0)+r12_gci_inv*(r10_gci*w0-r00_gci*w1);
 
     float temp10 = (2*(q3_2+q0_2)-1)*r22_gci+2*(q2*q3-q0*q1)*r21_gci+2*(q1*q3+q0*q2)*r20_gci+2*(q2*q3+q0*q1)*r12_gci+(2*(q2_2+q0_2)-1)*r11_gci+2*(q1*q2-q0*q3)*r10_gci+2*(q1*q3-q0*q2)*r02_gci+2*(q0*q3+q1*q2)*r01_gci+(2*(q1_2+q0_2)-1)*r00_gci+1;
 
@@ -298,83 +313,84 @@ void calculateHAndJacobian(
         temp10 = 0.001;
     }
 
-    float h3 = sqrt(temp10)/2;
-    float h4 = (2*(q2*q3+q0*q1)*r22_gci+(2*(q2_2+q0_2)-1)*r21_gci+2*(q1*q2-q0*q3)*r20_gci-(2*(q3_2+q0_2)-1)*r12_gci-2*(q2*q3-q0*q1)*r11_gci-2*(q1*q3+q0*q2)*r10_gci)/(2*sqrt(temp10));
-    float h5 = (-2*(q1*q3-q0*q2)*r22_gci-2*(q0*q3+q1*q2)*r21_gci-(2*(q1_2+q0_2)-1)*r20_gci+(2*(q3_2+q0_2)-1)*r02_gci+2*(q2*q3-q0*q1)*r01_gci+2*(q1*q3+q0*q2)*r00_gci)/(2*sqrt(temp10));
-    float h6 = (2*(q1*q3-q0*q2)*r12_gci+2*(q0*q3+q1*q2)*r11_gci+(2*(q1_2+q0_2)-1)*r10_gci-2*(q2*q3+q0*q1)*r02_gci-(2*(q2_2+q0_2)-1)*r01_gci-2*(q1*q2-q0*q3)*r00_gci)/(2*sqrt(temp10));
-    float h7 = r00_gci*(-t2_gci_inv*w2+t3_gci_inv*w1+v1)+r01_gci*(t1_gci_inv*w2-t3_gci_inv*w0+v2)+r02_gci*(-t1_gci_inv*w1+t2_gci_inv*w0+v3);
-    float h8 = r10_gci*(-t2_gci_inv*w2+t3_gci_inv*w1+v1)+r11_gci*(t1_gci_inv*w2-t3_gci_inv*w0+v2)+r12_gci*(-t1_gci_inv*w1+t2_gci_inv*w0+v3);
-    float h9 = r20_gci*(-t2_gci_inv*w2+t3_gci_inv*w1+v1)+r21_gci*(t1_gci_inv*w2-t3_gci_inv*w0+v2)+r22_gci*(-t1_gci_inv*w1+t2_gci_inv*w0+v3);
-    float h10 = r02_gci*t3_gmc+r01_gci*t2_gmc+r00_gci*t1_gmc+t1_gci;
-    float h11 = r12_gci*t3_gmc+r11_gci*t2_gmc+t2_gci+r10_gci*t1_gmc;
-    float h12 = r22_gci*t3_gmc+t3_gci+r21_gci*t2_gmc+r20_gci*t1_gmc;
+    float h3 = sqrt(temp10)/2;    
+    float h4 = (-2*(q2*q3-q0*q1)*r22_gci+(2*(q3_2+q0_2)-1)*r21_gci-(2*(q2_2+q0_2)-1)*r12_gci+2*(q2*q3+q0*q1)*r11_gci-2*(q0*q3+q1*q2)*r02_gci+2*(q1*q3-q0*q2)*r01_gci)/(2*sqrt(temp10));
+    float h5 = (2*(q1*q3+q0*q2)*r22_gci-(2*(q3_2+q0_2)-1)*r20_gci+2*(q1*q2-q0*q3)*r12_gci-2*(q2*q3+q0*q1)*r10_gci+(2*(q1_2+q0_2)-1)*r02_gci-2*(q1*q3-q0*q2)*r00_gci)/(2*sqrt(temp10));
+    float h6 = (-2*(q1*q3+q0*q2)*r21_gci+2*(q2*q3-q0*q1)*r20_gci-2*(q1*q2-q0*q3)*r11_gci+(2*(q2_2+q0_2)-1)*r10_gci-(2*(q1_2+q0_2)-1)*r01_gci+2*(q0*q3+q1*q2)*r00_gci)/(2*sqrt(temp10));
+    float h7 = r00_gci_inv*(-t2_gci*w2+t3_gci*w1+v1)+r01_gci_inv*(t1_gci*w2-t3_gci*w0+v2)+r02_gci_inv*(-t1_gci*w1+t2_gci*w0+v3);
+    float h8 = r10_gci_inv*(-t2_gci*w2+t3_gci*w1+v1)+r11_gci_inv*(t1_gci*w2-t3_gci*w0+v2)+r12_gci_inv*(-t1_gci*w1+t2_gci*w0+v3);
+    float h9 = r20_gci_inv*(-t2_gci*w2+t3_gci*w1+v1)+r21_gci_inv*(t1_gci*w2-t3_gci*w0+v2)+r22_gci_inv*(-t1_gci*w1+t2_gci*w0+v3);
+    float h10 = 2*(q1*q3+q0*q2)*t3_gci+2*(q1*q2-q0*q3)*t2_gci+t1_gmc+(2*(q1_2+q0_2)-1)*t1_gci;
+    float h11 = 2*(q2*q3-q0*q1)*t3_gci+t2_gmc+(2*(q2_2+q0_2)-1)*t2_gci+2*(q0*q3+q1*q2)*t1_gci;
+    float h12 = t3_gmc+(2*(q3_2+q0_2)-1)*t3_gci+2*(q2*q3+q0*q1)*t2_gci+2*(q1*q3-q0*q2)*t1_gci;
 
     h << h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12;
 
-    H(10,0) = r00_gci;
-    H(11,0) = r10_gci;   
-    H(12,0) = r20_gci;
+    H(0,0) = r11_gci*r22_gci_inv-r21_gci*r21_gci_inv;
+    H(1,0) = r02_gci_inv*r12_gci-r01_gci_inv*r22_gci;   
+    H(2,0) = r10_gci*r12_gci_inv-r11_gci_inv*r20_gci;
+    H(7,0) = r02_gci_inv*t2_gci-r01_gci_inv*t3_gci;
+    H(8,0) = r12_gci_inv*t2_gci-r11_gci_inv*t3_gci;
+    H(9,0) = r22_gci_inv*t2_gci-r21_gci_inv*t3_gci;
 
-    H(10,1) = r01_gci;
-    H(11,1) = r11_gci;   
-    H(12,1) = r21_gci;
+    H(0,1) = r20_gci_inv*r21_gci-r01_gci*r22_gci_inv;
+    H(1,1) = r00_gci_inv*r22_gci-r02_gci*r02_gci_inv;   
+    H(2,1) = r10_gci_inv*r20_gci-r00_gci*r12_gci_inv;
+    H(7,1) = r00_gci_inv*t3_gci-r02_gci_inv*t1_gci;
+    H(8,1) = r10_gci_inv*t3_gci-r12_gci_inv*t1_gci;
+    H(9,1) = r20_gci_inv*t3_gci-r22_gci_inv*t1_gci;
 
-    H(10,2) = r02_gci;
-    H(11,2) = r12_gci;   
-    H(12,2) = r22_gci;
+    H(0,2) = r01_gci*r21_gci_inv-r11_gci*r20_gci_inv;
+    H(1,2) = r01_gci_inv*r02_gci-r00_gci_inv*r12_gci; 
+    H(2,2) = r00_gci*r11_gci_inv-r10_gci*r10_gci_inv;
+    H(7,2) = r01_gci_inv*t1_gci-r00_gci_inv*t2_gci;
+    H(8,2) = r11_gci_inv*t1_gci-r10_gci_inv*t2_gci;
+    H(9,2) = r21_gci_inv*t1_gci-r20_gci_inv*t2_gci;
 
     H(3,3) = (4*q0*r22_gci-2*q1*r21_gci+2*q2*r20_gci+2*q1*r12_gci+4*q0*r11_gci-2*q3*r10_gci-2*q2*r02_gci+2*q3*r01_gci+4*q0*r00_gci)/(4*sqrt(temp10));
-    H(4,3) = (2*q1*r22_gci+4*q0*r21_gci-2*q3*r20_gci-4*q0*r12_gci+2*q1*r11_gci-2*q2*r10_gci)/(2*sqrt(temp10))-((4*q0*r22_gci-2*q1*r21_gci+2*q2*r20_gci+2*q1*r12_gci+4*q0*r11_gci-2*q3*r10_gci-2*q2*r02_gci+2*q3*r01_gci+4*q0*r00_gci)*(2*(q2*q3+q0*q1)*r22_gci+(2*(q2_2+q0_2)-1)*r21_gci+2*(q1*q2-q0*q3)*r20_gci-(2*(q3_2+q0_2)-1)*r12_gci-2*(q2*q3-q0*q1)*r11_gci-2*(q1*q3+q0*q2)*r10_gci))/(4*pow(temp10, 3/2));
-    H(5,3) = (2*q2*r22_gci-2*q3*r21_gci-4*q0*r20_gci+4*q0*r02_gci-2*q1*r01_gci+2*q2*r00_gci)/(2*sqrt(temp10))-((4*q0*r22_gci-2*q1*r21_gci+2*q2*r20_gci+2*q1*r12_gci+4*q0*r11_gci-2*q3*r10_gci-2*q2*r02_gci+2*q3*r01_gci+4*q0*r00_gci)*(-2*(q1*q3-q0*q2)*r22_gci-2*(q0*q3+q1*q2)*r21_gci-(2*(q1_2+q0_2)-1)*r20_gci+(2*(q3_2+q0_2)-1)*r02_gci+2*(q2*q3-q0*q1)*r01_gci+2*(q1*q3+q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
-    H(6,3) = (-2*q2*r12_gci+2*q3*r11_gci+4*q0*r10_gci-2*q1*r02_gci-4*q0*r01_gci+2*q3*r00_gci)/(2*sqrt(temp10))-((2*(q1*q3-q0*q2)*r12_gci+2*(q0*q3+q1*q2)*r11_gci+(2*(q1_2+q0_2)-1)*r10_gci-2*(q2*q3+q0*q1)*r02_gci-(2*(q2_2+q0_2)-1)*r01_gci-2*(q1*q2-q0*q3)*r00_gci)*(4*q0*r22_gci-2*q1*r21_gci+2*q2*r20_gci+2*q1*r12_gci+4*q0*r11_gci-2*q3*r10_gci-2*q2*r02_gci+2*q3*r01_gci+4*q0*r00_gci))/(4*pow(temp10, 3/2));
+    H(4,3) = (2*q1*r22_gci+4*q0*r21_gci-4*q0*r12_gci+2*q1*r11_gci-2*q3*r02_gci-2*q2*r01_gci)/(2*sqrt(temp10))-((4*q0*r22_gci-2*q1*r21_gci+2*q2*r20_gci+2*q1*r12_gci+4*q0*r11_gci-2*q3*r10_gci-2*q2*r02_gci+2*q3*r01_gci+4*q0*r00_gci)*(-2*(q2*q3-q0*q1)*r22_gci+(2*(q3_2+q0_2)-1)*r21_gci-(2*(q2_2+q0_2)-1)*r12_gci+2*(q2*q3+q0*q1)*r11_gci-2*(q0*q3+q1*q2)*r02_gci+2*(q1*q3-q0*q2)*r01_gci))/(4*pow(temp10, 3/2));
+    H(5,3) = (2*q2*r22_gci-4*q0*r20_gci-2*q3*r12_gci-2*q1*r10_gci+4*q0*r02_gci+2*q2*r00_gci)/(2*sqrt(temp10))-((4*q0*r22_gci-2*q1*r21_gci+2*q2*r20_gci+2*q1*r12_gci+4*q0*r11_gci-2*q3*r10_gci-2*q2*r02_gci+2*q3*r01_gci+4*q0*r00_gci)*(2*(q1*q3+q0*q2)*r22_gci-(2*(q3_2+q0_2)-1)*r20_gci+2*(q1*q2-q0*q3)*r12_gci-2*(q2*q3+q0*q1)*r10_gci+(2*(q1_2+q0_2)-1)*r02_gci-2*(q1*q3-q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
+    H(6,3) = (-2*q2*r21_gci-2*q1*r20_gci+2*q3*r11_gci+4*q0*r10_gci-4*q0*r01_gci+2*q3*r00_gci)/(2*sqrt(temp10))-((-2*(q1*q3+q0*q2)*r21_gci+2*(q2*q3-q0*q1)*r20_gci-2*(q1*q2-q0*q3)*r11_gci+(2*(q2_2+q0_2)-1)*r10_gci-(2*(q1_2+q0_2)-1)*r01_gci+2*(q0*q3+q1*q2)*r00_gci)*(4*q0*r22_gci-2*q1*r21_gci+2*q2*r20_gci+2*q1*r12_gci+4*q0*r11_gci-2*q3*r10_gci-2*q2*r02_gci+2*q3*r01_gci+4*q0*r00_gci))/(4*pow(temp10, 3/2));
+    H(10,3) = 2*q2*t3_gci-2*q3*t2_gci+4*q0*t1_gci;
+    H(11,3) = -2*q1*t3_gci+4*q0*t2_gci+2*q3*t1_gci;
+    H(12,3) = 4*q0*t3_gci+2*q1*t2_gci-2*q2*t1_gci;
+
 
     H(3,4) = (-2*q0*r21_gci+2*q3*r20_gci+2*q0*r12_gci+2*q2*r10_gci+2*q3*r02_gci+2*q2*r01_gci+4*q1*r00_gci)/(4*sqrt(temp10));
-    H(4,4) = (2*q0*r22_gci+2*q2*r20_gci+2*q0*r11_gci-2*q3*r10_gci)/(2*sqrt(temp10))-((-2*q0*r21_gci+2*q3*r20_gci+2*q0*r12_gci+2*q2*r10_gci+2*q3*r02_gci+2*q2*r01_gci+4*q1*r00_gci)*(2*(q2*q3+q0*q1)*r22_gci+(2*(q2_2+q0_2)-1)*r21_gci+2*(q1*q2-q0*q3)*r20_gci-(2*(q3_2+q0_2)-1)*r12_gci-2*(q2*q3-q0*q1)*r11_gci-2*(q1*q3+q0*q2)*r10_gci))/(4*pow(temp10, 3/2));
-    H(5,4) = (-2*q3*r22_gci-2*q2*r21_gci-4*q1*r20_gci-2*q0*r01_gci+2*q3*r00_gci)/(2*sqrt(temp10))-((-2*q0*r21_gci+2*q3*r20_gci+2*q0*r12_gci+2*q2*r10_gci+2*q3*r02_gci+2*q2*r01_gci+4*q1*r00_gci)*(-2*(q1*q3-q0*q2)*r22_gci-2*(q0*q3+q1*q2)*r21_gci-(2*(q1_2+q0_2)-1)*r20_gci+(2*(q3_2+q0_2)-1)*r02_gci+2*(q2*q3-q0*q1)*r01_gci+2*(q1*q3+q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
-    H(6,4) = (2*q3*r12_gci+2*q2*r11_gci+4*q1*r10_gci-2*q0*r02_gci-2*q2*r00_gci)/(2*sqrt(temp10))-((2*(q1*q3-q0*q2)*r12_gci+2*(q0*q3+q1*q2)*r11_gci+(2*(q1_2+q0_2)-1)*r10_gci-2*(q2*q3+q0*q1)*r02_gci-(2*(q2_2+q0_2)-1)*r01_gci-2*(q1*q2-q0*q3)*r00_gci)*(-2*q0*r21_gci+2*q3*r20_gci+2*q0*r12_gci+2*q2*r10_gci+2*q3*r02_gci+2*q2*r01_gci+4*q1*r00_gci))/(4*pow(temp10, 3/2));
+    H(4,4) = (2*q0*r22_gci+2*q0*r11_gci-2*q2*r02_gci+2*q3*r01_gci)/(2*sqrt(temp10))-((-2*q0*r21_gci+2*q3*r20_gci+2*q0*r12_gci+2*q2*r10_gci+2*q3*r02_gci+2*q2*r01_gci+4*q1*r00_gci)*(-2*(q2*q3-q0*q1)*r22_gci+(2*(q3_2+q0_2)-1)*r21_gci-(2*(q2_2+q0_2)-1)*r12_gci+2*(q2*q3+q0*q1)*r11_gci-2*(q0*q3+q1*q2)*r02_gci+2*(q1*q3-q0*q2)*r01_gci))/(4*pow(temp10, 3/2));
+    H(5,4) = (2*q3*r22_gci+2*q2*r12_gci-2*q0*r10_gci+4*q1*r02_gci-2*q3*r00_gci)/(2*sqrt(temp10))-((-2*q0*r21_gci+2*q3*r20_gci+2*q0*r12_gci+2*q2*r10_gci+2*q3*r02_gci+2*q2*r01_gci+4*q1*r00_gci)*(2*(q1*q3+q0*q2)*r22_gci-(2*(q3_2+q0_2)-1)*r20_gci+2*(q1*q2-q0*q3)*r12_gci-2*(q2*q3+q0*q1)*r10_gci+(2*(q1_2+q0_2)-1)*r02_gci-2*(q1*q3-q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
+    H(6,4) = (-2*q3*r21_gci-2*q0*r20_gci-2*q2*r11_gci-4*q1*r01_gci+2*q2*r00_gci)/(2*sqrt(temp10))-((-2*q0*r21_gci+2*q3*r20_gci+2*q0*r12_gci+2*q2*r10_gci+2*q3*r02_gci+2*q2*r01_gci+4*q1*r00_gci)*(-2*(q1*q3+q0*q2)*r21_gci+2*(q2*q3-q0*q1)*r20_gci-2*(q1*q2-q0*q3)*r11_gci+(2*(q2_2+q0_2)-1)*r10_gci-(2*(q1_2+q0_2)-1)*r01_gci+2*(q0*q3+q1*q2)*r00_gci))/(4*pow(temp10, 3/2));
+    H(10,4) = 2*q3*t3_gci+2*q2*t2_gci+4*q1*t1_gci;
+    H(11,4) = 2*q2*t1_gci-2*q0*t3_gci;
+    H(12,4) = 2*q0*t2_gci+2*q3*t1_gci;
 
-    H(3,5) = (2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci)/(4*sqrt(temp10));
-    H(4,5) = (2*q3*r22_gci+4*q2*r21_gci+2*q1*r20_gci-2*q3*r11_gci-2*q0*r10_gci)/(2*sqrt(temp10))-((2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci)*(2*(q2*q3+q0*q1)*r22_gci+(2*(q2_2+q0_2)-1)*r21_gci+2*(q1*q2-q0*q3)*r20_gci-(2*(q3_2+q0_2)-1)*r12_gci-2*(q2*q3-q0*q1)*r11_gci-2*(q1*q3+q0*q2)*r10_gci))/(4*pow(temp10, 3/2));
-    H(5,5) = (2*q0*r22_gci-2*q1*r21_gci+2*q3*r01_gci+2*q0*r00_gci)/(2*sqrt(temp10))-((2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci)*(-2*(q1*q3-q0*q2)*r22_gci-2*(q0*q3+q1*q2)*r21_gci-(2*(q1_2+q0_2)-1)*r20_gci+(2*(q3_2+q0_2)-1)*r02_gci+2*(q2*q3-q0*q1)*r01_gci+2*(q1*q3+q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
-    H(6,5) = (-2*q0*r12_gci+2*q1*r11_gci-2*q3*r02_gci-4*q2*r01_gci-2*q1*r00_gci)/(2*sqrt(temp10))-((2*(q1*q3-q0*q2)*r12_gci+2*(q0*q3+q1*q2)*r11_gci+(2*(q1_2+q0_2)-1)*r10_gci-2*(q2*q3+q0*q1)*r02_gci-(2*(q2_2+q0_2)-1)*r01_gci-2*(q1*q2-q0*q3)*r00_gci)*(2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci))/(4*pow(temp10, 3/2));
+    H(3,5) =(2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci)/(4*sqrt(temp10));
+    H(4,5) =(-2*q3*r22_gci-4*q2*r12_gci+2*q3*r11_gci-2*q1*r02_gci-2*q0*r01_gci)/(2*sqrt(temp10))-((2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci)*(-2*(q2*q3-q0*q1)*r22_gci+(2*(q3_2+q0_2)-1)*r21_gci-(2*(q2_2+q0_2)-1)*r12_gci+2*(q2*q3+q0*q1)*r11_gci-2*(q0*q3+q1*q2)*r02_gci+2*(q1*q3-q0*q2)*r01_gci))/(4*pow(temp10, 3/2));
+    H(5,5) =(2*q0*r22_gci+2*q1*r12_gci-2*q3*r10_gci+2*q0*r00_gci)/(2*sqrt(temp10))-((2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci)*(2*(q1*q3+q0*q2)*r22_gci-(2*(q3_2+q0_2)-1)*r20_gci+2*(q1*q2-q0*q3)*r12_gci-2*(q2*q3+q0*q1)*r10_gci+(2*(q1_2+q0_2)-1)*r02_gci-2*(q1*q3-q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
+    H(6,5) =(-2*q0*r21_gci+2*q3*r20_gci-2*q1*r11_gci+4*q2*r10_gci+2*q1*r00_gci)/(2*sqrt(temp10))-((2*q3*r21_gci+2*q0*r20_gci+2*q3*r12_gci+4*q2*r11_gci+2*q1*r10_gci-2*q0*r02_gci+2*q1*r01_gci)*(-2*(q1*q3+q0*q2)*r21_gci+2*(q2*q3-q0*q1)*r20_gci-2*(q1*q2-q0*q3)*r11_gci+(2*(q2_2+q0_2)-1)*r10_gci-(2*(q1_2+q0_2)-1)*r01_gci+2*(q0*q3+q1*q2)*r00_gci))/(4*pow(temp10, 3/2));
+    H(10,5) =2*q0*t3_gci+2*q1*t2_gci;
+    H(11,5) =2*q3*t3_gci+4*q2*t2_gci+2*q1*t1_gci;
+    H(12,5) =2*q3*t2_gci-2*q0*t1_gci;
 
     H(3,6) = (4*q3*r22_gci+2*q2*r21_gci+2*q1*r20_gci+2*q2*r12_gci-2*q0*r10_gci+2*q1*r02_gci+2*q0*r01_gci)/(4*sqrt(temp10));
-    H(4,6) = (2*q2*r22_gci-2*q0*r20_gci-4*q3*r12_gci-2*q2*r11_gci-2*q1*r10_gci)/(2*sqrt(temp10))-((4*q3*r22_gci+2*q2*r21_gci+2*q1*r20_gci+2*q2*r12_gci-2*q0*r10_gci+2*q1*r02_gci+2*q0*r01_gci)*(2*(q2*q3+q0*q1)*r22_gci+(2*(q2_2+q0_2)-1)*r21_gci+2*(q1*q2-q0*q3)*r20_gci-(2*(q3_2+q0_2)-1)*r12_gci-2*(q2*q3-q0*q1)*r11_gci-2*(q1*q3+q0*q2)*r10_gci))/(4*pow(temp10, 3/2));
-    H(5,6) = (-2*q1*r22_gci-2*q0*r21_gci+4*q3*r02_gci+2*q2*r01_gci+2*q1*r00_gci)/(2*sqrt(temp10))-((4*q3*r22_gci+2*q2*r21_gci+2*q1*r20_gci+2*q2*r12_gci-2*q0*r10_gci+2*q1*r02_gci+2*q0*r01_gci)*(-2*(q1*q3-q0*q2)*r22_gci-2*(q0*q3+q1*q2)*r21_gci-(2*(q1_2+q0_2)-1)*r20_gci+(2*(q3_2+q0_2)-1)*r02_gci+2*(q2*q3-q0*q1)*r01_gci+2*(q1*q3+q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
-    H(6,6) = (2*q1*r12_gci+2*q0*r11_gci-2*q2*r02_gci+2*q0*r00_gci)/(2*sqrt(temp10))-((2*(q1*q3-q0*q2)*r12_gci+2*(q0*q3+q1*q2)*r11_gci+(2*(q1_2+q0_2)-1)*r10_gci-2*(q2*q3+q0*q1)*r02_gci-(2*(q2_2+q0_2)-1)*r01_gci-2*(q1*q2-q0*q3)*r00_gci)*(4*q3*r22_gci+2*q2*r21_gci+2*q1*r20_gci+2*q2*r12_gci-2*q0*r10_gci+2*q1*r02_gci+2*q0*r01_gci))/(4*pow(temp10, 3/2));
+    H(4,6) = (-2*q2*r22_gci+4*q3*r21_gci+2*q2*r11_gci-2*q0*r02_gci+2*q1*r01_gci)/(2*sqrt(temp10))-((4*q3*r22_gci+2*q2*r21_gci+2*q1*r20_gci+2*q2*r12_gci-2*q0*r10_gci+2*q1*r02_gci+2*q0*r01_gci)*(-2*(q2*q3-q0*q1)*r22_gci+(2*(q3_2+q0_2)-1)*r21_gci-(2*(q2_2+q0_2)-1)*r12_gci+2*(q2*q3+q0*q1)*r11_gci-2*(q0*q3+q1*q2)*r02_gci+2*(q1*q3-q0*q2)*r01_gci))/(4*pow(temp10, 3/2));
+    H(5,6) = (2*q1*r22_gci-4*q3*r20_gci-2*q0*r12_gci-2*q2*r10_gci-2*q1*r00_gci)/(2*sqrt(temp10))-((4*q3*r22_gci+2*q2*r21_gci+2*q1*r20_gci+2*q2*r12_gci-2*q0*r10_gci+2*q1*r02_gci+2*q0*r01_gci)*(2*(q1*q3+q0*q2)*r22_gci-(2*(q3_2+q0_2)-1)*r20_gci+2*(q1*q2-q0*q3)*r12_gci-2*(q2*q3+q0*q1)*r10_gci+(2*(q1_2+q0_2)-1)*r02_gci-2*(q1*q3-q0*q2)*r00_gci))/(4*pow(temp10, 3/2));
+    H(6,6) = (-2*q1*r21_gci+2*q2*r20_gci+2*q0*r11_gci+2*q0*r00_gci)/(2*sqrt(temp10))-((-2*(q1*q3+q0*q2)*r21_gci+2*(q2*q3-q0*q1)*r20_gci-2*(q1*q2-q0*q3)*r11_gci+(2*(q2_2+q0_2)-1)*r10_gci-(2*(q1_2+q0_2)-1)*r01_gci+2*(q0*q3+q1*q2)*r00_gci)*(4*q3*r22_gci+2*q2*r21_gci+2*q1*r20_gci+2*q2*r12_gci-2*q0*r10_gci+2*q1*r02_gci+2*q0*r01_gci))/(4*pow(temp10, 3/2));
+    H(10,6) = 2*q1*t3_gci-2*q0*t2_gci;
+    H(11,6) = 2*q2*t3_gci+2*q0*t1_gci;
+    H(12,6) = 4*q3*t3_gci+2*q2*t2_gci+2*q1*t1_gci;
 
-    H(0,7) = r11_gci_inv*r22_gci-r21_gci*r21_gci_inv;
-    H(1,7) = r02_gci*r12_gci_inv-r01_gci*r22_gci_inv;
-    H(2,7) = r10_gci_inv*r12_gci-r11_gci*r20_gci_inv;
-    H(7,7) = r02_gci*t2_gci_inv-r01_gci*t3_gci_inv;
-    H(8,7) = r12_gci*t2_gci_inv-r11_gci*t3_gci_inv;
-    H(9,7) = r22_gci*t2_gci_inv-r21_gci*t3_gci_inv;
+    H(7,7) = r00_gci_inv;
+    H(8,7) = r10_gci_inv;
+    H(9,7) = r20_gci_inv;
 
-    H(0,8) = r20_gci*r21_gci_inv-r01_gci_inv*r22_gci;
-    H(1,8) = r00_gci*r22_gci_inv-r02_gci*r02_gci_inv;
-    H(2,8) = r10_gci*r20_gci_inv-r00_gci_inv*r12_gci;
-    H(7,8) = r00_gci*t3_gci_inv-r02_gci*t1_gci_inv;
-    H(8,8) = r10_gci*t3_gci_inv-r12_gci*t1_gci_inv;
-    H(9,8) = r20_gci*t3_gci_inv-r22_gci*t1_gci_inv;
+    H(7,8) = r01_gci_inv;
+    H(8,8) = r11_gci_inv;
+    H(9,8) = r21_gci_inv;
 
-    H(0,9) = r01_gci_inv*r21_gci-r11_gci_inv*r20_gci;
-    H(1,9) = r01_gci*r02_gci_inv-r00_gci*r12_gci_inv;
-    H(2,9) = r00_gci_inv*r11_gci-r10_gci*r10_gci_inv;
-    H(7,9) = r01_gci*t1_gci_inv-r00_gci*t2_gci_inv;
-    H(8,9) = r11_gci*t1_gci_inv-r10_gci*t2_gci_inv;
-    H(9,9) = r21_gci*t1_gci_inv-r20_gci*t2_gci_inv;
-
-    H(7,10) = r00_gci;
-    H(8,10) = r10_gci;
-    H(9,10) = r20_gci;
-
-    H(7,11) = r01_gci;
-    H(8,11) = r11_gci;
-    H(9,11) = r21_gci;
-
-    H(7,12) = r02_gci;
-    H(8,12) = r12_gci;
-    H(9,12) = r22_gci;
+    H(7,9) = r02_gci_inv;
+    H(8,9) = r12_gci_inv;
+    H(9,9) = r22_gci_inv;
 }
 
 Eigen::Matrix4d invertG(Eigen::Matrix4d G)

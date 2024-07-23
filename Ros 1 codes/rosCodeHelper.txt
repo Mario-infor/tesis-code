@@ -1,11 +1,42 @@
-source ~/kalibr_workspace/devel/setup.bash
+-- Hay que ejecutar esto en cada ventana de consola que se abra
+	source ~/kalibr_workspace/devel/setup.bash
 
-roscore
+-- Inicializar ros
+	roscore
 
-roslaunch jetson_csi_cam jetson_csi_cam.launch width:=800 height:=600
+-- Levantar el nodo de la cámara 
+	roslaunch jetson_csi_cam jetson_csi_cam.launch width:=800 height:=600
 
-roslaunch imu_bno055 imu.launch
+-- Levanar el nodo de la IMU
+	roslaunch imu_bno055 imu.launch
 
-rostopic echo
+-- Ver los datos que está imprimiendo un topic
+	rostopic echo [nombre del topic]
 
-rostopic list
+-- Ver todos los topics que se están publicando
+	rostopic list
+
+
+-- Imprimir un aprilgrid en formato pdf
+	rosrun kalibr kalibr_create_target_pdf --type apriltag --nx 6 --ny 6 --tsize 0.025 --tspace 0.3
+
+-- Ejecutar el algoritmo de varianza de Allan
+	rosrun allan_variance_ros allan_variance static_imu_fixed_axis/ static_imu_fixed_axis/config.yaml
+	
+	rosrun allan_variance_ros analysis.py --data static_imu_fixed_axis/allan_variance.csv  --config static_imu_fixed_axis/config.yaml
+
+-- Ver información sobre una rosbag
+	rosbag info [nombre_de_rosbag].bag
+
+-- Ver la frecuencia con que se está leyendo un sensor publicado en un rostopic (ejemplo /imu/raw)
+	rostopic hz [nombre_del_topic]
+
+-- Mostrar la imagen de video de la cámara en una ventana
+	rqt_image_view
+
+-- Calibrar la cámara sola
+	rosrun kalibr kalibr_calibrate_cameras --target april_6x6.yaml --models pinhole-equi --topics /csi_cam_0/image_raw --bag static_cam.bag --bag-freq 10.0 --show-extraction
+
+-- Calibrar la cámara junto con la IMU
+	rosrun kalibr kalibr_calibrate_imu_camera --imu-models scale-misalignment --reprojection-sigma 1.0 --target april_6x6.yaml --imu static_imu_fixed_axis/imu.yaml --cams static_cam_radtan/static_cam-camchain.yaml --bag dynamic_cam_imu.bag --show-extraction
+
