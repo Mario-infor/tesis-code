@@ -73,6 +73,7 @@ FrameMarkersData getRotationTraslationFromFrame(
     cv::Ptr<cv::aruco::DetectorParameters> detectorParams)
 {
     FrameMarkersData frameMarkersData;
+    float markerSIze = 0.17;
 
     std::vector<int> markerIds;
     std::vector<std::vector<cv::Point2f>> markerCorners;
@@ -90,7 +91,32 @@ FrameMarkersData getRotationTraslationFromFrame(
                 cameraMatrixVector,
                 distCoeffsVector);
 
-    if (markerIds.size() > 0)
+    std::vector<cv::Point3f> objPoints;
+    objPoints.push_back(cv::Point3f(-markerSIze/2.f, markerSIze/2.f, 0));
+    objPoints.push_back(cv::Point3f(markerSIze/2.f, markerSIze/2.f, 0));
+    objPoints.push_back(cv::Point3f(markerSIze/2.f, -markerSIze/2.f, 0));
+    objPoints.push_back(cv::Point3f(-markerSIze/2.f, -markerSIze/2.f, 0));
+    
+    if (!markerIds.empty())
+    {
+        std::vector<cv::Vec3d> rvecs(markerIds.size()), tvecs(markerIds.size());
+        
+        for(size_t i = 0; i < markerIds.size(); i++)
+        {
+            cv::cornerSubPix(frame.frame, markerCorners[i], cv::Size(5, 5), cv::Size(-1, -1),
+                cv::TermCriteria(cv::TermCriteria::EPS | cv::TermCriteria::COUNT, 30, 0.1));
+
+            cv::solvePnP(objPoints, markerCorners[i], cameraMatrix, distCoeffs, rvecs[i], tvecs[i]);
+        }
+
+        frameMarkersData.markerIds = markerIds;
+        frameMarkersData.rvecs = rvecs;
+        frameMarkersData.tvecs = tvecs;
+
+        cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
+    }
+
+    /*if (markerIds.size() > 0)
     {
         cv::aruco::drawDetectedMarkers(frame.frame, markerCorners, markerIds);
 
@@ -98,10 +124,8 @@ FrameMarkersData getRotationTraslationFromFrame(
 
         cv::aruco::estimatePoseSingleMarkers(markerCorners, 0.17, cameraMatrix, distCoeffs, rvecs, tvecs);
 
-        frameMarkersData.markerIds = markerIds;
-        frameMarkersData.rvecs = rvecs;
-        frameMarkersData.tvecs = tvecs;
-    }
+        
+    }*/
 
     return frameMarkersData;
 }
