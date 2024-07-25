@@ -559,23 +559,28 @@ void runCameraAndIMUKalmanFilter()
                 Eigen::Matrix3d stateRot = stateQuat.toRotationMatrix();
                 Eigen::Vector3d statePos( KF.statePost.at<float>(0),  KF.statePost.at<float>(1), KF.statePost.at<float>(2));
                
-                Eigen::Matrix4d resetGmi;
-                resetGmi.setIdentity();
-                resetGmi.block<3, 3>(0, 0) = stateRot;
-                resetGmi.block<3, 1>(0, 3) = statePos;
+                Eigen::Matrix4d stateGmc;
+                stateGmc.setIdentity();
+                stateGmc.block<3, 3>(0, 0) = stateRot;
+                stateGmc.block<3, 1>(0, 3) = statePos;
                 
-                Gwi = Gmw_inv * resetGmi * Gci;
+                //Gwi = Gmw_inv * resetGmi * Gci;
+                Eigen::Matrix4d resetGmi =  stateGmc * Gci;
                 
                 Eigen::Matrix4d stateGhi = getGhi(
                     Eigen::Vector3d{KF.statePost.at<float>(10), KF.statePost.at<float>(11), KF.statePost.at<float>(12)},
                     Eigen::Vector3d{KF.statePost.at<float>(7), KF.statePost.at<float>(8), KF.statePost.at<float>(9)}
                 );
                 
-                Eigen::Matrix4d imuGhiMarker = Gci_inv * stateGhi * Gci;
-                Eigen::Matrix4d imuGhiWorld = Gmw_inv * imuGhiMarker * Gmw;
+                /*Eigen::Matrix4d imuGhiMarker = Gci_inv * stateGhi * Gci;
+                Eigen::Matrix4d imuGhiWorld = Gmw_inv * imuGhiMarker * Gmw;*/
 
-                deltaPos = Eigen::Vector3d(Gwi.block<3, 1>(0, 3));
-                deltaVel = Eigen::Vector3d(imuGhiWorld.block<3, 1>(0, 3));
+                Eigen::Matrix4d Ghi_cam_cam = Gmc * stateGhi * Gcm;
+                Eigen::Matrix4d Ghi_imu_imu = Gci * Ghi_cam_cam * Gci_inv;
+                Eigen::Matrix4d Ghi_imu_marker = Gmi * Ghi_imu_imu * invertG(Gmi);
+
+                deltaPos = Eigen::Vector3d(resetGmi.block<3, 1>(0, 3));
+                deltaVel = Eigen::Vector3d(Ghi_imu_marker.block<3, 1>(0, 3));
 
                 accBias.setZero();
                 gyroBias.setZero();
@@ -583,7 +588,7 @@ void runCameraAndIMUKalmanFilter()
                 lastOneWasCamera = true;  
                 firstCamRun = false;                                
             }
-            else if (false)
+            else
             {
                 ImuInputJetson tempImuData = imuReadVector.at(indexImu);
 
@@ -614,33 +619,42 @@ void runCameraAndIMUKalmanFilter()
 
                 /////////////////////////// Measurenment ////////////////////////////////////
 
-                Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
-                Eigen::Vector3d imuAccFromWorld = imuRot * acc;
+                //Eigen::Matrix3d imuRot = imuQuat.toRotationMatrix();
+
+                Eigen::Quaterniond stateQuat(KF.statePost.at<float>(3),  KF.statePost.at<float>(4),  KF.statePost.at<float>(5), KF.statePost.at<float>(6));
+                Eigen::Matrix3d stateRot = stateQuat.toRotationMatrix();
+                Eigen::Vector3d statePos( KF.statePost.at<float>(0),  KF.statePost.at<float>(1), KF.statePost.at<float>(2));
+               
+                Eigen::Matrix4d stateGmc;
+                stateGmc.setIdentity();
+                stateGmc.block<3, 3>(0, 0) = stateRot;
+                stateGmc.block<3, 1>(0, 3) = statePos;
+
+                Gmi =  stateGmc * Gci;
+                Eigen::Matrix3d Rmi = Gmi.block<3, 3>(0, 0);
+                Eigen::Vector3d Tmi = Gmi.block<3, 1>(0, 3);
+
+                Eigen::Vector3d imuAccFromMarker = Rmi * acc;
 
                 float deltaTForIntegration = tempImuData.time - imuReadVector.at(indexImu - 1).time;
                 deltaTForIntegration /= 1000;
                 
-                imuPreintegration(deltaTForIntegration, imuAccFromWorld, deltaPos, deltaVel);
+                imuPreintegration(deltaTForIntegration, imuAccFromMarker, deltaPos, deltaVel);
 
-                Gwi.block<3, 3>(0, 0) = imuRot;
-                Gwi.block<3, 1>(0, 3) = deltaPos;
-
-                Gmi = Gmw * Gwi;
-                
-                Eigen::Matrix3d Rmi = Gmi.block<3, 3>(0, 0);
-                Eigen::Vector3d Tmi = Gmi.block<3, 1>(0, 3);
+                //Gwi.block<3, 3>(0, 0) = imuRot;
+                //Gwi.block<3, 1>(0, 3) = deltaPos;
 
                 Eigen::Quaterniond imuQuatMarker(Rmi);
                 fixQuatEigen(imuQuatMarker);
 
-                Eigen::Matrix3d wHatWorld = getWHat(imuRot * gyro);
-                Eigen::Matrix4d Ghi_wi;
-                Ghi_wi.setZero();
-                Ghi_wi.block<3, 3>(0, 0) = wHatWorld;
-                Ghi_wi.block<3, 1>(0, 3) = deltaVel;
+                Eigen::Matrix3d wHatMarker = getWHat(Rmi * gyro);
+                Eigen::Matrix4d Ghi_mi;
+                 Ghi_mi.setZero();
+                 Ghi_mi.block<3, 3>(0, 0) = wHatMarker;
+                 Ghi_mi.block<3, 1>(0, 3) = deltaVel;
 
-                Eigen::Matrix4d Ghi_mi = Gmw * Ghi_wi * Gmw_inv;
-                Eigen::Vector3d w_mi{Ghi_mi(2, 1), Ghi_mi(0, 2), Ghi_mi(1, 0)};
+                Eigen::Vector3d w_mi(Rmi * gyro);
+                //Eigen::Matrix4d Ghi_mi = Gmw * Ghi_wi * Gmw_inv;
 
                 measurementImu(0) = w_mi.x();
                 measurementImu(1) = w_mi.y();
@@ -649,16 +663,16 @@ void runCameraAndIMUKalmanFilter()
                 measurementImu(4) = imuQuatMarker.x();
                 measurementImu(5) = imuQuatMarker.y();
                 measurementImu(6) = imuQuatMarker.z();
-                measurementImu(7) = Ghi_mi(0, 3);
-                measurementImu(8) = Ghi_mi(1, 3);
-                measurementImu(9) = Ghi_mi(2, 3);
+                measurementImu(7) = deltaVel.x();
+                measurementImu(8) = deltaVel.y();
+                measurementImu(9) = deltaVel.z();
                 measurementImu(10) = Tmi.x();
                 measurementImu(11) = Tmi.y();
                 measurementImu(12) = Tmi.z();
 
                 std::cout << "measurementImu: " << std::endl <<  measurementImu << std::endl << std::endl;
 
-                GmcFromImu = invertG(Gmi * Gci_inv);
+                /*GmcFromImu = invertG(Gmi * Gci_inv);
                 GhiCamFromImu = Gci * Ghi_mi * Gci_inv;
                 Eigen::Quaterniond quatCamFromIMU(GmcFromImu.block<3,3>(0,0));
 
@@ -667,33 +681,29 @@ void runCameraAndIMUKalmanFilter()
                 measurementCamFromIMU.block<3,1>(7,0) = GhiCamFromImu.block<3,1>(0,3);
                 measurementCamFromIMU(10) = GhiCamFromImu(0, 3);
                 measurementCamFromIMU(11) = GhiCamFromImu(1, 3);
-                measurementCamFromIMU(12) = GhiCamFromImu(2, 3);
+                measurementCamFromIMU(12) = GhiCamFromImu(2, 3);*/
                 
 
                 oldDeltaTImu = tempImuData.time;
 
                 /////////////////////////// Update ////////////////////////////////////
 
-                Eigen::Quaterniond tempStateQuat(KF.statePost.at<float>(3), KF.statePost.at<float>(4), KF.statePost.at<float>(5), KF.statePost.at<float>(6));
-                Eigen::Matrix3d tempStateRot = tempStateQuat.toRotationMatrix();
-                Eigen::Vector3d tempStatePos(KF.statePost.at<float>(0), KF.statePost.at<float>(1), KF.statePost.at<float>(2));
                 Eigen::Vector3d tempStateLinSpeed(KF.statePost.at<float>(7), KF.statePost.at<float>(8), KF.statePost.at<float>(9));
                 Eigen::Vector3d tempStateAngSpeed(KF.statePost.at<float>(10), KF.statePost.at<float>(11), KF.statePost.at<float>(12));
-                Eigen::Matrix4d tempState;
-                tempState.setIdentity();
-                tempState.block<3, 3>(0, 0) = tempStateRot;
-                tempState.block<3, 1>(0, 3) = tempStatePos;
-
-                Eigen::Matrix4d GmeasIMU = tempState * Gci;
                 
-                std::cout << "tempState: " << std::endl << tempState << std::endl << std::endl;
-                std::cout << "GmeasIMU: " << std::endl << GmeasIMU << std::endl << std::endl;
+                //Eigen::Matrix4d GmeasIMU = stateGmc * Gci;
 
                 Eigen::Matrix4d tempStateGhi = getGhi(tempStateAngSpeed, tempStateLinSpeed);
-                Eigen::Matrix4d ghiIMU = Gci * tempStateGhi * Gci_inv;
+        
+                Eigen::Matrix4d Ghi_cam_cam = Gmc * tempStateGhi * Gcm;
+                Eigen::Matrix4d Ghi_imu_imu = Gci * Ghi_cam_cam * Gci_inv;
+                Eigen::Matrix4d Ghi_imu_marker = Gmi * Ghi_imu_imu * invertG(Gmi);
 
-                std::cout << "tempStateGhi: " << std::endl << tempStateGhi << std::endl << std::endl;
-                std::cout << "ghiIMU: " << std::endl << ghiIMU << std::endl << std::endl;
+                Eigen::Matrix4d Ghi_joinned = Gmi * Gci * Gmc * tempStateGhi * Gcm * Gci_inv * invertG(Gmi);
+
+                //std::cout << "tempStateGhi: " << std::endl << tempStateGhi << std::endl << std::endl;
+                //std::cout << "Ghi_imu_marker: " << std::endl << Ghi_imu_marker << std::endl << std::endl;
+                //std::cout << "Ghi_joinned: " << std::endl << Ghi_joinned << std::endl << std::endl;
 
                 Eigen::MatrixXd h(measurementSize, 1);
                 Eigen::MatrixXd H(measurementSize, stateSize);
@@ -705,10 +715,7 @@ void runCameraAndIMUKalmanFilter()
                 std::cout << "h: " << std::endl << h << std::endl << std::endl;
                 std::cout << "H: " << std::endl << H << std::endl << std::endl;
                 
-                std::cout << "State Post: " << std::endl << KF.statePost << std::endl << std::endl;
                 correctIMU_EKF(KF, measurementNoiseCovImu, measurementImu, h, H);
-                std::cout << "State Post: " << std::endl << KF.statePost << std::endl << std::endl;
-
                 fixStateQuaternion(KF, "post");
                 
                 Eigen::Matrix4d Ghi_mc = Gci_inv * Ghi_mi * Gci; 
@@ -806,16 +813,24 @@ void runCameraAndIMUKalmanFilter()
 
             deltaPos = Tmi;
             Eigen::Matrix3d wHatCam = getWHat(tempAngVel);
-            Eigen::Matrix4d Ghi_cam;
-            Ghi_cam.setZero();
-            Ghi_cam.block<3, 3>(0, 0) = wHatCam;
-            Ghi_cam.block<3, 1>(0, 3) = tempLinealVel;
+            Eigen::Matrix4d Ghi_cam_marker;
+            Ghi_cam_marker.setZero();
+            Ghi_cam_marker.block<3, 3>(0, 0) = wHatCam;
+            Ghi_cam_marker.block<3, 1>(0, 3) = tempLinealVel;
 
-            Eigen::Matrix4d Ghi_imu = Gci * Ghi_cam * Gci_inv;
+            Eigen::Matrix4d Ghi_cam_cam = Gmc * Ghi_cam_marker * Gcm;
+            Eigen::Matrix4d Ghi_imu_imu = Gci * Ghi_cam_cam * Gci_inv;
+            Eigen::Matrix4d Ghi_imu_marker = Gmi * Ghi_imu_imu * invertG(Gmi);
 
-            deltaVel = Ghi_imu.block<3, 1>(0, 3);
+            std::cout << "Ghi_cam_marker: " << std::endl << Ghi_cam_marker << std::endl << std::endl;
+            std::cout << "Ghi_imu_marker: " << std::endl << Ghi_imu_marker << std::endl << std::endl;
+
+            deltaVel = Ghi_imu_marker.block<3, 1>(0, 3);
             std::cout << "deltaVel: " << std::endl << deltaVel << std::endl << std::endl;
-            std::cout << "angVel: " << std::endl << Ghi_imu.block<3, 3>(0, 0) << std::endl << std::endl;
+            std::cout << ": " << std::endl << deltaPos << std::endl << std::endl;
+
+            std::cout << "Ghi_imu_imu: " << std::endl << Ghi_imu_imu.block<3, 3>(0, 0) << std::endl << std::endl;
+            std::cout << "gyro: " << std::endl << getWHat(gyro) << std::endl << std::endl;
 
             //Eigen::Vector3d imuAccFromWorld = imuRot * acc;
             Eigen::Vector3d imuAccFromMarker = Rmi * acc;
