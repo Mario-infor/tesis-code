@@ -58,10 +58,13 @@ Eigen::Matrix<double, 4, 4> getGFromFrameMarkersData(FrameMarkersData frameMarke
 
 Eigen::Vector3d getAngularVelocityFromTwoQuats(Eigen::Quaterniond q1, Eigen::Quaterniond q2, float deltaT);
 
+Eigen::Vector3d calculateAngularVelocity(const Eigen::Quaterniond& q1, const Eigen::Quaterniond& q2, double delta_t);
+
 void calculateHAndJacobian(
     cv::KalmanFilter KF,
     Eigen::Matrix<double, 4, 4> Gci,
     Eigen::Matrix<double, 4, 4> Gci_inv,
+    Eigen::Matrix<double, 4, 4> Gmi,
     Eigen::MatrixXd &h,
     Eigen::MatrixXd &H
 );

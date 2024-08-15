@@ -195,9 +195,9 @@ void updateTransitionMatrixFusion(cv::KalmanFilter &KF, float deltaT, int stateS
 {
     float dT2 = deltaT / 2;
 
-    /*float w1 = KF.statePost.at<float>(10);
-    float w2 = KF.statePost.at<float>(11);
-    float w3 = KF.statePost.at<float>(12);*/
+    //float w1 = KF.statePost.at<float>(10);
+    //float w2 = KF.statePost.at<float>(11);
+    //float w3 = KF.statePost.at<float>(12);
 
     float w1 = w(0);
     float w2 = w(1);
@@ -228,8 +228,8 @@ void imuPreintegration(
     Eigen::Vector3d &deltaVel)
 {
     deltaVel += imuAccWorld * deltaT;
-    //deltaPos += deltaVel * deltaT;
-    deltaPos += deltaVel * deltaT + 0.5 * imuAccWorld * deltaT * deltaT;
+    deltaPos += deltaVel * deltaT;
+    //deltaPos += deltaVel * deltaT + 0.5 * imuAccWorld * deltaT * deltaT;
 }
 
 void runCameraAndIMUKalmanFilter()
@@ -387,6 +387,8 @@ void runCameraAndIMUKalmanFilter()
     Eigen::Vector3d gyro{tempImuData.gyroVect.x(), tempImuData.gyroVect.y(), tempImuData.gyroVect.z()};
     Eigen::Vector3d acc{tempImuData.accVect.x(), tempImuData.accVect.y(), tempImuData.accVect.z()};
 
+    gyro *= MATH_DEGREE_TO_RAD;
+
     deltaTImu = tempImuData.time - imuReadVector.at(indexImu - 1).time;
     deltaTImu /= 1000;
 
@@ -506,7 +508,13 @@ void runCameraAndIMUKalmanFilter()
                         //firstCamRun = false;
                     }
 
-                    w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCamMeasurement);
+                    //w = getAngularVelocityFromTwoQuats(oldCamQuat, camQuat, deltaTCamMeasurement);
+                    //Eigen::Vector3d otherW = calculateAngularVelocity(oldCamQuat, camQuat, deltaTCamMeasurement);
+                    //std::cout << "w:" << std::endl << w << std::endl;
+                    //std::cout << "otherW:" << std::endl << otherW << std::endl << std::endl;
+
+                    w = calculateAngularVelocity(oldCamQuat, camQuat, deltaTCamMeasurement);
+
                     Eigen::Vector3d linearSpeed = (camT - oldCamT) / deltaTCamMeasurement;
 
                     if(linearSpeed.norm() < 5)
@@ -601,6 +609,8 @@ void runCameraAndIMUKalmanFilter()
 
                 Eigen::Vector3d gyro{tempImuData.gyroVect.x(), tempImuData.gyroVect.y(), tempImuData.gyroVect.z()};
                 Eigen::Vector3d acc{tempImuData.accVect.x(), tempImuData.accVect.y(), tempImuData.accVect.z()};
+
+                gyro *= MATH_DEGREE_TO_RAD;
                 
                 accBias = accBias + accelerometer_random_walk * sqrt(deltaTImu) * acc;
                 gyroBias = gyroBias + gyroscope_random_walk * sqrt(deltaTImu) * gyro;
@@ -710,7 +720,7 @@ void runCameraAndIMUKalmanFilter()
                 h.setZero();
                 H.setIdentity();
 
-                calculateHAndJacobian(KF, Gci, Gci_inv, h, H);
+                calculateHAndJacobian(KF, Gci, Gci_inv, Gmi, h, H);
 
                 std::cout << "h: " << std::endl << h << std::endl << std::endl;
                 std::cout << "H: " << std::endl << H << std::endl << std::endl;
@@ -759,7 +769,8 @@ void runCameraAndIMUKalmanFilter()
             deltaTCam /= 1000;
 
             Eigen::Vector3d tempLinealVel = (camT - firstCamT) / deltaTCam;
-            Eigen::Vector3d tempAngVel = getAngularVelocityFromTwoQuats(firstCamQuat, camQuat, deltaTCam);
+            //Eigen::Vector3d tempAngVel = getAngularVelocityFromTwoQuats(firstCamQuat, camQuat, deltaTCam);
+            Eigen::Vector3d tempAngVel = calculateAngularVelocity(firstCamQuat, camQuat, deltaTCam);
 
             measurementCam(0) = camT.x(); // Traslation x
             measurementCam(1) = camT.y(); // Traslation y
